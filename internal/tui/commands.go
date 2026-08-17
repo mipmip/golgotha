@@ -97,27 +97,48 @@ func waitForProgress(provider, owner string, ch <-chan fetch.Event) tea.Cmd {
 // unit tests (no network); tests inject a fake or feed progressMsg directly.
 func defaultProgressFetcher(cfg *config.Config) func(ctx context.Context, p *config.Provider, owner string) (<-chan fetch.Event, context.CancelFunc) {
 	reg := provider.NewDefaultRegistry()
+	return progressFetcherWith(reg.Build)
+}
+
+// progressFetcherWith builds a streaming fetcher from an injectable provider
+// constructor (the default uses the real registry; tests inject a fake).
+//
+// Ordering matters: FetchOwner emits its own terminal Done *before* it returns,
+// but the owner is committed to the cache only after it returns. The UI handles
+// Done by reloading from the cache, so a naive pass-through races the save and
+// shows an empty list until restart. To avoid that we SUPPRESS the inner Done,
+// commit the cache, then emit Done ourselves — guaranteeing the reload sees the
+// saved repos. Failed/Canceled pass straight through (they don't touch the cache).
+func progressFetcherWith(build func(*config.Provider) (provider.Provider, error)) func(ctx context.Context, p *config.Provider, owner string) (<-chan fetch.Event, context.CancelFunc) {
 	return func(ctx context.Context, p *config.Provider, owner string) (<-chan fetch.Event, context.CancelFunc) {
 		cctx, cancel := context.WithCancel(ctx)
 		ch := make(chan fetch.Event, 16)
 
 		go func() {
 			defer close(ch)
-			emit := func(ev fetch.Event) {
+			// raw delivers any event to the channel; emit is the same but drops
+			// the inner Done (re-emitted after the cache commit).
+			raw := fetch.Emit(func(ev fetch.Event) {
 				select {
 				case ch <- ev:
 				case <-cctx.Done():
 				}
-			}
+			})
+			emit := fetch.Emit(func(ev fetch.Event) {
+				if ev.Kind == fetch.KindDone {
+					return
+				}
+				raw(ev)
+			})
 
-			client, err := reg.Build(p)
+			client, err := build(p)
 			if err != nil {
-				fetch.Emit(emit).Failed(p.Name, owner, err)
+				raw.Failed(p.Name, owner, err)
 				return
 			}
 			of, ok := client.(provider.OwnerFetcher)
 			if !ok {
-				fetch.Emit(emit).Failed(p.Name, owner, fmt.Errorf("provider %q does not support progress fetch", p.Name))
+				raw.Failed(p.Name, owner, fmt.Errorf("provider %q does not support progress fetch", p.Name))
 				return
 			}
 
@@ -127,16 +148,19 @@ func defaultProgressFetcher(cfg *config.Config) func(ctx context.Context, p *con
 				return
 			}
 
-			// Complete: commit the owner to the cache (all-or-nothing).
+			// Complete: commit the owner to the cache (all-or-nothing) BEFORE the
+			// UI observes Done, so its reload-from-cache finds the repos.
 			c, _, lerr := cache.LoadOrEmpty(p.Name)
 			if lerr != nil {
-				fetch.Emit(emit).Warning(p.Name, owner, "cache load failed: "+lerr.Error())
+				// Emit a terminal event so the UI leaves the fetching state.
+				raw.Failed(p.Name, owner, fmt.Errorf("cache load failed: %w", lerr))
 				return
 			}
 			c.MarkOwnerFetched(owner, repos, nowUTC())
 			if serr := cache.Save(p.Name, c); serr != nil {
-				fetch.Emit(emit).Warning(p.Name, owner, "cache save failed: "+serr.Error())
+				raw.Warning(p.Name, owner, "cache save failed: "+serr.Error())
 			}
+			raw.Done(p.Name, owner, len(repos))
 		}()
 
 		return ch, cancel

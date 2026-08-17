@@ -1,11 +1,11 @@
 ---
 # skull2-fjmh
 title: rename project
-status: in-progress
+status: completed
 type: task
 priority: normal
 created_at: 2026-08-17T18:43:01Z
-updated_at: 2026-08-17T21:12:29Z
+updated_at: 2026-08-17T21:25:01Z
 parent: skull2-qati
 ---
 
@@ -41,3 +41,7 @@ collision-prone (everyone's dotfiles alias `gg`, and it reads as "good game").
 - Cache dir / any on-disk paths keyed on the old name
 - Repo name on remote `git@github.com:mipmip/skull2.git` (open question:
   rename repo too, or keep repo slug and only rename the tool?)
+
+## Summary of Changes
+
+Shipped via rename-to-golgotha (commit b806b2fe). Full rebrand skull2 -> Golgotha (binary gol): module github.com/mipmip/golgotha, cmd/gol, SKULL2_ -> GOLGOTHA_ env prefix, ~/.config/golgotha + ~/.cache/golgotha, flake (pname/mainProgram/subPackages cmd/gol), goreleaser/release workflow/release.sh, coverage.sh import paths, docs and config.example. GitHub repo + remote already renamed. nix flake check passes; gol 0.1.0 builds. Note: .beans.yml prefix left skull2- to preserve existing bean IDs.
