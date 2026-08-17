@@ -1,0 +1,195 @@
+package cache
+
+import (
+	"os"
+	"path/filepath"
+	"reflect"
+	"testing"
+	"time"
+
+	"github.com/mipmip/skull2/internal/provider"
+)
+
+func TestSaveLoadRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", dir)
+
+	in := Cache{
+		FetchedAt: time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC),
+		Repos: []provider.Repo{
+			{
+				Owner: "acme", Name: "alpha", Description: "d",
+				SSHURL: "git@x:acme/alpha.git", HTTPSURL: "https://x/acme/alpha.git",
+				WebURL: "https://x/acme/alpha", DefaultBranch: "main",
+				Archived: false, Fork: true,
+				UpdatedAt: time.Date(2023, 6, 7, 8, 9, 10, 0, time.UTC),
+			},
+			{Owner: "acme", Name: "beta"},
+		},
+	}
+
+	if err := Save("github", in); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load("github")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.FetchedAt.Equal(in.FetchedAt) {
+		t.Fatalf("fetched_at: got %v want %v", got.FetchedAt, in.FetchedAt)
+	}
+	if !reflect.DeepEqual(got.Repos, in.Repos) {
+		t.Fatalf("repos mismatch:\n got %+v\nwant %+v", got.Repos, in.Repos)
+	}
+
+	// File lives at <dir>/skull2/github.json.
+	if _, err := os.Stat(filepath.Join(dir, "skull2", "github.json")); err != nil {
+		t.Fatalf("cache file not at expected path: %v", err)
+	}
+}
+
+func TestSaveAtomicNoTempLeftBehind(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", dir)
+
+	if err := Save("gitlab", Cache{FetchedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(filepath.Join(dir, "skull2"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if filepath.Ext(e.Name()) == ".tmp" {
+			t.Fatalf("temp file left behind: %s", e.Name())
+		}
+	}
+	if len(entries) != 1 || entries[0].Name() != "gitlab.json" {
+		t.Fatalf("unexpected cache dir contents: %v", entries)
+	}
+}
+
+func TestLoadMissingIsError(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", dir)
+	if _, err := Load("nope"); err == nil {
+		t.Fatal("expected error for missing cache")
+	}
+}
+
+func TestLoadOrEmptyMissingTolerated(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", dir)
+
+	c, ok, err := LoadOrEmpty("nope")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ok {
+		t.Fatal("expected ok=false for missing cache")
+	}
+	if len(c.Repos) != 0 || !c.FetchedAt.IsZero() {
+		t.Fatalf("expected empty cache, got %+v", c)
+	}
+}
+
+func TestLoadOrEmptyExisting(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", dir)
+	if err := Save("cb", Cache{FetchedAt: time.Unix(1000, 0).UTC(), Repos: []provider.Repo{{Name: "r"}}}); err != nil {
+		t.Fatal(err)
+	}
+	c, ok, err := LoadOrEmpty("cb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || len(c.Repos) != 1 || c.Repos[0].Name != "r" {
+		t.Fatalf("existing cache not loaded: ok=%v c=%+v", ok, c)
+	}
+}
+
+func TestLoadCorruptJSON(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", dir)
+	cdir := filepath.Join(dir, "skull2")
+	if err := os.MkdirAll(cdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cdir, "bad.json"), []byte("{not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load("bad"); err == nil {
+		t.Fatal("expected parse error")
+	}
+	// LoadOrEmpty surfaces non-not-exist errors too.
+	if _, _, err := LoadOrEmpty("bad"); err == nil {
+		t.Fatal("expected parse error from LoadOrEmpty")
+	}
+}
+
+func TestSaveMkdirError(t *testing.T) {
+	dir := t.TempDir()
+	// Make the XDG cache root a regular file so MkdirAll(<file>/skull2) fails.
+	f := filepath.Join(dir, "asfile")
+	if err := os.WriteFile(f, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_CACHE_HOME", f)
+	if err := Save("github", Cache{FetchedAt: time.Now()}); err == nil {
+		t.Fatal("expected mkdir error")
+	}
+}
+
+func TestSaveThenLoadDefaultProviderMissingReadError(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", dir)
+	// Create the provider path as a directory so ReadFile fails with a non
+	// not-exist error, exercising Load's read-error branch.
+	cdir := filepath.Join(dir, "skull2")
+	if err := os.MkdirAll(filepath.Join(cdir, "dirprov.json"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load("dirprov"); err == nil {
+		t.Fatal("expected read error for directory path")
+	}
+	if _, _, err := LoadOrEmpty("dirprov"); err == nil {
+		t.Fatal("expected read error from LoadOrEmpty")
+	}
+}
+
+func TestDirErrorWhenHomeUnresolvable(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", "")
+	t.Setenv("HOME", "")
+	// On unix, an empty HOME makes os.UserHomeDir return an error.
+	if _, err := Dir(); err == nil {
+		t.Skip("home resolvable in this environment; skipping error-path check")
+	}
+	if _, err := Path("x"); err == nil {
+		t.Fatal("expected Path to propagate Dir error")
+	}
+}
+
+func TestDirFallbackToHome(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", "")
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	d, err := Dir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d != filepath.Join(home, ".cache", "skull2") {
+		t.Fatalf("dir = %q", d)
+	}
+}
+
+func TestPath(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", dir)
+	p, err := Path("github")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p != filepath.Join(dir, "skull2", "github.json") {
+		t.Fatalf("path = %q", p)
+	}
+}
