@@ -306,6 +306,31 @@ func TestMarkOwnerFetchedUpdatesOnlyThatOwner(t *testing.T) {
 	}
 }
 
+// TestCommitOnlyOnCompleteLeavesFailedOwnerUnfetched models the repo-cache
+// contract: an owner whose fetch failed/canceled (so MarkOwnerFetched is not
+// called for it) stays unfetched with no repos, while a completed owner commits.
+func TestCommitOnlyOnCompleteLeavesFailedOwnerUnfetched(t *testing.T) {
+	now := time.Now().UTC()
+	var c Cache
+	c.SetOwners(now, []string{"good", "bad"})
+
+	// Only the completed owner is committed; the failed owner is left as-is.
+	c.MarkOwnerFetched("good", []provider.Repo{{Owner: "good", Name: "g1"}}, now)
+
+	if !c.OwnerFetched("good") {
+		t.Fatal("completed owner must be fetched")
+	}
+	if c.OwnerFetched("bad") {
+		t.Fatal("uncommitted owner must remain unfetched")
+	}
+	if len(c.ReposFor("bad")) != 0 {
+		t.Fatal("uncommitted owner must have no repos")
+	}
+	if got := c.UnfetchedOwners(); len(got) != 1 || got[0] != "bad" {
+		t.Fatalf("UnfetchedOwners = %v, want [bad]", got)
+	}
+}
+
 func TestSetOwnersDropsRemovedOwnerRepos(t *testing.T) {
 	now := time.Now().UTC()
 	var c Cache

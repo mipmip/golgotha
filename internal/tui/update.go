@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/mipmip/skull2/internal/cache"
 	"github.com/mipmip/skull2/internal/config"
+	"github.com/mipmip/skull2/internal/fetch"
 )
 
 // Update implements tea.Model. It is pure with respect to side effects: all
@@ -85,9 +88,96 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.clampCursor()
 		m.status = fmt.Sprintf("fetched %s: %d repos", ownerLabel(msg.Owner), len(msg.Repos))
 		return m, nil
+
+	case progressMsg:
+		return m.handleProgress(msg)
+
+	case spinner.TickMsg:
+		// Keep the spinner animating only while a fetch is in flight.
+		if m.fetchingOwner == "" {
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		return m, cmd
 	}
 
 	return m, nil
+}
+
+// handleProgress folds one fetch progress event into the model and re-issues a
+// wait for the next event (until the channel closes). It is pure: cache commits
+// happen in the fetch goroutine, not here.
+func (m *Model) handleProgress(msg progressMsg) (tea.Model, tea.Cmd) {
+	// Ignore stale events from a fetch the user already backed out of.
+	if m.fetchingOwner != msg.Owner {
+		return m, nil
+	}
+
+	if msg.closed {
+		// Channel drained; if we are still marked fetching (no terminal event
+		// arrived, e.g. cancel) clear the state.
+		if m.fetchingOwner == msg.Owner {
+			m.fetchingOwner = ""
+			m.fetchCancel = nil
+		}
+		return m, nil
+	}
+
+	ev := msg.Event
+	switch ev.Kind {
+	case fetch.KindStarted:
+		m.status = fmt.Sprintf("fetching %s...", ownerLabel(ev.Owner))
+
+	case fetch.KindPageDone:
+		m.fetchPage++
+		if ev.TotalPages > 0 {
+			m.fetchTotal = ev.TotalPages
+		}
+		m.fetchRepos = ev.ReposSoFar
+		if m.fetchTotal > 0 {
+			m.status = fmt.Sprintf("fetching %s page %d/%d — %d repos",
+				ownerLabel(ev.Owner), m.fetchPage, m.fetchTotal, m.fetchRepos)
+		} else {
+			m.status = fmt.Sprintf("fetching %s page %d — %d repos",
+				ownerLabel(ev.Owner), m.fetchPage, m.fetchRepos)
+		}
+
+	case fetch.KindWarning:
+		m.status = fmt.Sprintf("%s: %s", ownerLabel(ev.Owner), ev.Msg)
+
+	case fetch.KindDone:
+		m.fetchingOwner = ""
+		m.fetchCancel = nil
+		m.reloadOwnerFromCache(ev.Provider, ev.Owner)
+		m.clampCursor()
+		m.status = fmt.Sprintf("fetched %s: %d repos", ownerLabel(ev.Owner), ev.Count)
+		return m, waitForProgress(msg.Provider, msg.Owner, msg.ch)
+
+	case fetch.KindFailed:
+		m.cancelFetch()
+		m.status = fmt.Sprintf("fetch failed %s/%s: %v", ev.Provider, ownerLabel(ev.Owner), ev.Err)
+		return m, waitForProgress(msg.Provider, msg.Owner, msg.ch)
+
+	case fetch.KindCanceled:
+		m.fetchingOwner = ""
+		m.fetchCancel = nil
+		m.status = fmt.Sprintf("fetch canceled %s", ownerLabel(ev.Owner))
+		return m, waitForProgress(msg.Provider, msg.Owner, msg.ch)
+	}
+
+	return m, waitForProgress(msg.Provider, msg.Owner, msg.ch)
+}
+
+// reloadOwnerFromCache reloads the just-fetched owner's repos from the persisted
+// cache into the model (repos + fetched state). The streaming fetch goroutine
+// commits the cache; this makes the result visible in the UI.
+func (m *Model) reloadOwnerFromCache(providerName, owner string) {
+	c, _, err := cache.LoadOrEmpty(providerName)
+	if err != nil {
+		return
+	}
+	m.applyOwnerRepos(providerName, owner, c.ReposFor(owner))
 }
 
 // handleKey processes a key message. When the filter input is active most keys
@@ -195,6 +285,10 @@ func (m *Model) goBack() (tea.Model, tea.Cmd) {
 	}
 	switch m.nav {
 	case levelRepos:
+		// Cancel any in-flight owner fetch; partial results are not cached.
+		if m.fetchingOwner != "" {
+			m.cancelFetch()
+		}
 		m.nav = levelOwners
 		m.selOwner = ""
 		m.cursor = 0
@@ -291,26 +385,57 @@ func (m *Model) open() (tea.Model, tea.Cmd) {
 // maybeFetchOwner returns a lazy-fetch command when the owner's repos are not
 // yet cached, or nil when they are (instant display) or fetching is disabled.
 func (m *Model) maybeFetchOwner(p *config.Provider, owner string) tea.Cmd {
-	if p == nil || m.ownerFetcher == nil {
+	if p == nil {
 		return nil
 	}
 	if m.fetchedOwners[p.Name][owner] {
 		return nil // already fetched: instant.
 	}
-	m.fetchingOwner = owner
-	m.status = fmt.Sprintf("fetching %s...", ownerLabel(owner))
-	return m.ownerFetcher(context.Background(), p, owner)
+	return m.startFetch(p, owner, "fetching %s...")
 }
 
 // forceFetchOwner returns a lazy-fetch command for the owner regardless of its
 // cached state (used by `r` to re-fetch the current owner).
 func (m *Model) forceFetchOwner(p *config.Provider, owner string) tea.Cmd {
-	if p == nil || m.ownerFetcher == nil {
+	if p == nil {
 		return nil
 	}
+	return m.startFetch(p, owner, "re-fetching %s...")
+}
+
+// startFetch begins a per-owner fetch. It prefers the streaming progressFetcher
+// (spinner/bar + cancel); when that is nil it falls back to the one-shot
+// ownerFetcher. It returns nil when both seams are disabled (tests).
+func (m *Model) startFetch(p *config.Provider, owner, statusFmt string) tea.Cmd {
 	m.fetchingOwner = owner
-	m.status = fmt.Sprintf("re-fetching %s...", ownerLabel(owner))
-	return m.ownerFetcher(context.Background(), p, owner)
+	m.fetchTotal = 0
+	m.fetchPage = 0
+	m.fetchRepos = 0
+	m.status = fmt.Sprintf(statusFmt, ownerLabel(owner))
+
+	if m.progressFetcher != nil {
+		ch, cancel := m.progressFetcher(context.Background(), p, owner)
+		m.fetchCancel = cancel
+		return tea.Batch(m.spinner.Tick, waitForProgress(p.Name, owner, ch))
+	}
+	if m.ownerFetcher != nil {
+		return m.ownerFetcher(context.Background(), p, owner)
+	}
+	m.fetchingOwner = ""
+	return nil
+}
+
+// cancelFetch cancels the in-flight streaming fetch (if any) and clears the
+// fetch-in-progress state without touching the cache.
+func (m *Model) cancelFetch() {
+	if m.fetchCancel != nil {
+		m.fetchCancel()
+		m.fetchCancel = nil
+	}
+	m.fetchingOwner = ""
+	m.fetchTotal = 0
+	m.fetchPage = 0
+	m.fetchRepos = 0
 }
 
 // refresh re-fetches the current scope. When viewing an owner's repos it

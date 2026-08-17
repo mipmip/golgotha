@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/mipmip/skull2/internal/cache"
 	"github.com/mipmip/skull2/internal/clonepath"
 	"github.com/mipmip/skull2/internal/config"
+	"github.com/mipmip/skull2/internal/fetch"
 	"github.com/mipmip/skull2/internal/provider"
 	"github.com/mipmip/skull2/internal/syncer"
 )
@@ -47,6 +49,84 @@ type ownerFetchedMsg struct {
 	Owner    string
 	Repos    []provider.Repo
 	Err      error
+}
+
+// progressMsg carries one fetch progress event plus the channel it came from so
+// the model can re-issue a wait for the next event, keeping Update pure.
+type progressMsg struct {
+	Provider string
+	Owner    string
+	Event    fetch.Event
+	ch       <-chan fetch.Event
+	// closed reports that the channel is drained (terminal); Event is zero.
+	closed bool
+}
+
+// waitForProgress blocks on the next event from ch and wraps it in a
+// progressMsg. When ch is closed it returns a progressMsg with closed=true so
+// the model can finalize. It carries ch forward so Update can wait again.
+func waitForProgress(provider, owner string, ch <-chan fetch.Event) tea.Cmd {
+	return func() tea.Msg {
+		ev, ok := <-ch
+		if !ok {
+			return progressMsg{Provider: provider, Owner: owner, ch: ch, closed: true}
+		}
+		return progressMsg{Provider: provider, Owner: owner, Event: ev, ch: ch}
+	}
+}
+
+// defaultProgressFetcher returns a streaming fetcher: it starts a page-aware
+// fetch for one owner in a goroutine, forwarding progress events on the returned
+// channel and closing it when done. The returned cancel stops the fetch. The
+// cache is committed (MarkOwnerFetched) only on a complete, successful fetch —
+// cancel or any failure leaves the owner unfetched. It is never exercised in
+// unit tests (no network); tests inject a fake or feed progressMsg directly.
+func defaultProgressFetcher(cfg *config.Config) func(ctx context.Context, p *config.Provider, owner string) (<-chan fetch.Event, context.CancelFunc) {
+	reg := provider.NewDefaultRegistry()
+	return func(ctx context.Context, p *config.Provider, owner string) (<-chan fetch.Event, context.CancelFunc) {
+		cctx, cancel := context.WithCancel(ctx)
+		ch := make(chan fetch.Event, 16)
+
+		go func() {
+			defer close(ch)
+			emit := func(ev fetch.Event) {
+				select {
+				case ch <- ev:
+				case <-cctx.Done():
+				}
+			}
+
+			client, err := reg.Build(p)
+			if err != nil {
+				fetch.Emit(emit).Failed(p.Name, owner, err)
+				return
+			}
+			of, ok := client.(provider.OwnerFetcher)
+			if !ok {
+				fetch.Emit(emit).Failed(p.Name, owner, fmt.Errorf("provider %q does not support progress fetch", p.Name))
+				return
+			}
+
+			repos, ferr := of.FetchOwner(cctx, emit, owner)
+			if ferr != nil {
+				// FetchOwner already emitted Failed/Canceled; do not touch the cache.
+				return
+			}
+
+			// Complete: commit the owner to the cache (all-or-nothing).
+			c, _, lerr := cache.LoadOrEmpty(p.Name)
+			if lerr != nil {
+				fetch.Emit(emit).Warning(p.Name, owner, "cache load failed: "+lerr.Error())
+				return
+			}
+			c.MarkOwnerFetched(owner, repos, nowUTC())
+			if serr := cache.Save(p.Name, c); serr != nil {
+				fetch.Emit(emit).Warning(p.Name, owner, "cache save failed: "+serr.Error())
+			}
+		}()
+
+		return ch, cancel
+	}
 }
 
 // cloneCmd clones one repo via the model's cloner and returns a cloneResultMsg.

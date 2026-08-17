@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mipmip/skull2/internal/config"
+	"github.com/mipmip/skull2/internal/fetch"
 )
 
 // defaultCodebergAPI is the public Codeberg base URL. The Gitea/Forgejo REST
@@ -65,40 +66,103 @@ func NewCodeberg(cfg config.Provider, httpClient *http.Client) *Codeberg {
 }
 
 // ListRepos returns repositories for the authenticated user (when no owners are
-// configured) plus each configured owner/org, mapped and filtered.
+// configured) plus each configured owner/org, mapped and filtered. It is a thin
+// wrapper over the event-emitting FetchOwner.
 func (c *Codeberg) ListRepos(ctx context.Context, owners []string) ([]Repo, error) {
+	return listReposOverFetch(ctx, owners, &c.cfg, c.FetchOwner)
+}
+
+// FetchOwner fetches a single owner's repositories page by page, emitting
+// progress events through emit. An empty owner (config.SelfOwner) fetches the
+// authenticated user's own repositories. The total page count is derived from
+// the X-Total-Count header when present; otherwise pagination falls back to
+// sequential (stopping on a short page).
+func (c *Codeberg) FetchOwner(ctx context.Context, emit fetch.Emit, owner string) ([]Repo, error) {
 	token, err := ResolveToken(&c.cfg, c.getter, c.env)
 	if err != nil {
 		return nil, err
 	}
 
-	var paths []string
-	if len(owners) == 0 {
-		paths = append(paths, "/api/v1/user/repos")
+	var path string
+	if owner == config.SelfOwner {
+		path = "/api/v1/user/repos"
 	} else {
-		for _, owner := range owners {
-			paths = append(paths, fmt.Sprintf("/api/v1/orgs/%s/repos", url.PathEscape(owner)))
-		}
+		path = fmt.Sprintf("/api/v1/orgs/%s/repos", url.PathEscape(owner))
 	}
 
-	var all []Repo
-	seen := make(map[string]struct{})
-	for _, p := range paths {
-		repos, err := c.listPath(ctx, token, p)
+	fetchPage := func(ctx context.Context, page int) (fetch.Page[Repo], error) {
+		u := fmt.Sprintf("%s%s?limit=%d&page=%d", c.base, path, codebergPageLimit, page)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 		if err != nil {
-			return nil, err
+			return fetch.Page[Repo]{}, err
 		}
+		req.Header.Set("Authorization", "token "+token)
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := c.client.Do(req)
+		if err != nil {
+			return fetch.Page[Repo]{}, err
+		}
+		body, err := readAllAndClose(resp)
+		if err != nil {
+			return fetch.Page[Repo]{}, err
+		}
+		if resp.StatusCode != http.StatusOK {
+			return fetch.Page[Repo]{}, fmt.Errorf("codeberg: %s: %s: %s", path, resp.Status, strings.TrimSpace(string(body)))
+		}
+
+		var repos []giteaRepo
+		if err := json.Unmarshal(body, &repos); err != nil {
+			return fetch.Page[Repo]{}, fmt.Errorf("codeberg: decoding response: %w", err)
+		}
+		items := make([]Repo, 0, len(repos))
 		for _, r := range repos {
-			key := r.Owner + "/" + r.Name
-			if _, dup := seen[key]; dup {
-				continue
-			}
-			seen[key] = struct{}{}
-			all = append(all, r)
+			items = append(items, Repo{
+				Owner:         r.Owner.Login,
+				Name:          r.Name,
+				Description:   r.Description,
+				SSHURL:        r.SSHURL,
+				HTTPSURL:      r.CloneURL,
+				WebURL:        r.HTMLURL,
+				DefaultBranch: r.DefaultBranch,
+				Archived:      r.Archived,
+				Fork:          r.Fork,
+				UpdatedAt:     r.UpdatedAt,
+			})
 		}
+		out := fetch.Page[Repo]{Items: items}
+		if page == 1 {
+			out.TotalPages = codebergTotalPages(resp.Header.Get("X-Total-Count"))
+		}
+		return out, nil
 	}
 
-	return FilterRepos(&c.cfg, all), nil
+	repos, err := fetch.Pages(ctx, emit, c.cfg.Name, owner, codebergPageLimit, fetchPage, repoKey)
+	if err != nil {
+		return nil, err
+	}
+	return FilterRepos(&c.cfg, repos), nil
+}
+
+// codebergTotalPages computes the total page count from the X-Total-Count header
+// value and the per-page limit. It returns 0 when the header is absent or
+// unparseable, signaling the sequential fallback.
+func codebergTotalPages(totalCount string) int {
+	if totalCount == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(totalCount)
+	if err != nil || n <= 0 {
+		return 0
+	}
+	pages := n / codebergPageLimit
+	if n%codebergPageLimit != 0 {
+		pages++
+	}
+	if pages < 1 {
+		pages = 1
+	}
+	return pages
 }
 
 // ListOwners discovers the authenticated user's organizations via
@@ -146,59 +210,6 @@ func (c *Codeberg) ListOwners(ctx context.Context) ([]string, error) {
 			out = append(out, name)
 		}
 		if codebergIsLastPage(resp.Header, page, len(orgs)) {
-			break
-		}
-	}
-	return out, nil
-}
-
-// listPath fetches every page for path, paginating via ?page/&limit until a
-// short (or empty) page is returned.
-func (c *Codeberg) listPath(ctx context.Context, token, path string) ([]Repo, error) {
-	var out []Repo
-	for page := 1; ; page++ {
-		u := fmt.Sprintf("%s%s?limit=%d&page=%d", c.base, path, codebergPageLimit, page)
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("Authorization", "token "+token)
-		req.Header.Set("Accept", "application/json")
-
-		resp, err := c.client.Do(req)
-		if err != nil {
-			return nil, err
-		}
-		body, err := readAllAndClose(resp)
-		if err != nil {
-			return nil, err
-		}
-		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("codeberg: %s: %s: %s", path, resp.Status, strings.TrimSpace(string(body)))
-		}
-
-		var repos []giteaRepo
-		if err := json.Unmarshal(body, &repos); err != nil {
-			return nil, fmt.Errorf("codeberg: decoding response: %w", err)
-		}
-		for _, r := range repos {
-			out = append(out, Repo{
-				Owner:         r.Owner.Login,
-				Name:          r.Name,
-				Description:   r.Description,
-				SSHURL:        r.SSHURL,
-				HTTPSURL:      r.CloneURL,
-				WebURL:        r.HTMLURL,
-				DefaultBranch: r.DefaultBranch,
-				Archived:      r.Archived,
-				Fork:          r.Fork,
-				UpdatedAt:     r.UpdatedAt,
-			})
-		}
-
-		// Stop when this page is the last: prefer X-Total-Count when present,
-		// otherwise stop on a short page.
-		if last := codebergIsLastPage(resp.Header, page, len(repos)); last {
 			break
 		}
 	}

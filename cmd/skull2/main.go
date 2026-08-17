@@ -134,6 +134,7 @@ func selectProviders(cfg *config.Config, providerName string) ([]*config.Provide
 // single ListRepos(p.Owners) behavior.
 func refreshProviders(ctx context.Context, selected []*config.Provider) error {
 	reg := provider.NewDefaultRegistry()
+	printer := &cliProgressPrinter{w: os.Stdout}
 	var firstErr error
 	setErr := func(err error) {
 		if firstErr == nil {
@@ -149,33 +150,68 @@ func refreshProviders(ctx context.Context, selected []*config.Provider) error {
 		}
 
 		if p.AllOwners {
-			if err := refreshAllOwners(ctx, client, p); err != nil {
+			if err := refreshAllOwners(ctx, client, p, printer); err != nil {
 				fmt.Fprintf(os.Stderr, "skull2: %s: %v\n", p.Name, err)
 				setErr(err)
 			}
 			continue
 		}
 
-		repos, err := client.ListRepos(ctx, p.Owners)
-		if err != nil {
+		if err := refreshExplicitOwners(ctx, client, p, printer); err != nil {
 			fmt.Fprintf(os.Stderr, "skull2: %s: %v\n", p.Name, err)
 			setErr(err)
-			continue
 		}
-		if err := cache.Save(p.Name, cache.Cache{FetchedAt: time.Now().UTC(), Repos: repos}); err != nil {
-			fmt.Fprintf(os.Stderr, "skull2: %s: %v\n", p.Name, err)
-			setErr(err)
-			continue
-		}
-		fmt.Printf("%s: %d repos\n", p.Name, len(repos))
 	}
+	return firstErr
+}
+
+// refreshExplicitOwners fetches the configured owners (or the authenticated
+// user's own repos when none are configured) bounded-parallel with progress, and
+// writes a flat provider cache. It returns the first fetch error encountered; a
+// failed owner leaves the cache unwritten only when every owner failed.
+func refreshExplicitOwners(ctx context.Context, client provider.Provider, p *config.Provider, printer *cliProgressPrinter) error {
+	owners := p.Owners
+	if len(owners) == 0 {
+		owners = []string{config.SelfOwner}
+	}
+
+	results := fetchOwnersProgress(ctx, client, p, owners, printer)
+
+	var (
+		merged   []provider.Repo
+		seen     = make(map[string]struct{})
+		firstErr error
+	)
+	for _, r := range results {
+		if r.Err != nil {
+			if firstErr == nil {
+				firstErr = r.Err
+			}
+			continue
+		}
+		for _, repo := range r.Repos {
+			key := repo.Owner + "/" + repo.Name
+			if _, dup := seen[key]; dup {
+				continue
+			}
+			seen[key] = struct{}{}
+			merged = append(merged, repo)
+		}
+	}
+
+	if err := cache.Save(p.Name, cache.Cache{FetchedAt: time.Now().UTC(), Repos: merged}); err != nil {
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
+	fmt.Printf("%s: %d repos\n", p.Name, len(merged))
 	return firstErr
 }
 
 // refreshAllOwners performs the eager discovery sweep for an all_owners provider:
 // it discovers owners, resolves the effective set, fetches repos for every owner
 // and writes a cache with a full owner index. Excluded owners are never fetched.
-func refreshAllOwners(ctx context.Context, client provider.Provider, p *config.Provider) error {
+func refreshAllOwners(ctx context.Context, client provider.Provider, p *config.Provider, printer *cliProgressPrinter) error {
 	discovered, err := client.ListOwners(ctx)
 	if err != nil {
 		return fmt.Errorf("discovering owners: %w", err)
@@ -189,25 +225,27 @@ func refreshAllOwners(ctx context.Context, client provider.Provider, p *config.P
 	var c cache.Cache
 	c.SetOwners(now, owners)
 
+	results := fetchOwnersProgress(ctx, client, p, owners, printer)
+
 	total := 0
-	for _, owner := range owners {
-		var reqOwners []string
-		if owner != config.SelfOwner {
-			reqOwners = []string{owner}
+	var firstErr error
+	for _, r := range results {
+		if r.Err != nil {
+			// Commit-only-on-complete: a failed/canceled owner is left unfetched.
+			if firstErr == nil {
+				firstErr = fmt.Errorf("listing repos for owner %q: %w", displayOwner(r.Owner), r.Err)
+			}
+			continue
 		}
-		repos, err := client.ListRepos(ctx, reqOwners)
-		if err != nil {
-			return fmt.Errorf("listing repos for owner %q: %w", displayOwner(owner), err)
-		}
-		c.MarkOwnerFetched(owner, repos, time.Now().UTC())
-		total += len(repos)
+		c.MarkOwnerFetched(r.Owner, r.Repos, time.Now().UTC())
+		total += len(r.Repos)
 	}
 
 	if err := cache.Save(p.Name, c); err != nil {
 		return err
 	}
 	fmt.Printf("%s: %d owners, %d repos\n", p.Name, len(owners), total)
-	return nil
+	return firstErr
 }
 
 // displayOwner renders the SelfOwner sentinel for logs.

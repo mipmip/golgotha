@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -181,7 +182,7 @@ func TestRefreshAllOwnersEagerSweep(t *testing.T) {
 	}
 	client := &fakeDiscoverClient{owners: []string{"acme", "beta"}}
 
-	if err := refreshAllOwners(context.Background(), client, p); err != nil {
+	if err := refreshAllOwners(context.Background(), client, p, &cliProgressPrinter{w: io.Discard}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -227,7 +228,7 @@ func TestRefreshAllOwnersSkipsExcluded(t *testing.T) {
 	}
 	client := &fakeDiscoverClient{owners: []string{"acme", "noisy"}}
 
-	if err := refreshAllOwners(context.Background(), client, p); err != nil {
+	if err := refreshAllOwners(context.Background(), client, p, &cliProgressPrinter{w: io.Discard}); err != nil {
 		t.Fatal(err)
 	}
 	c, err := cache.Load("gh")

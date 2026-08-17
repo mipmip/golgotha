@@ -78,10 +78,34 @@ func (m *Model) bodyText() string {
 	default:
 		if m.fetchingOwner != "" && m.fetchingOwner == m.selOwner {
 			m.indicatorText = ""
-			return dimStyle.Render(fmt.Sprintf("fetching %s...", ownerLabel(m.selOwner)))
+			return m.fetchProgressView()
 		}
 		return m.renderRepos(m.visibleRepos())
 	}
+}
+
+// fetchProgressView renders the in-flight fetch indicator: an indeterminate
+// spinner until the total page count is known, then a determinate bar plus a
+// "fetching <owner> page i/n — N repos" line.
+func (m *Model) fetchProgressView() string {
+	owner := ownerLabel(m.selOwner)
+	if m.fetchTotal <= 0 {
+		// Total unknown: spinner + running counts.
+		line := fmt.Sprintf("fetching %s — %d repos", owner, m.fetchRepos)
+		if m.fetchPage > 0 {
+			line = fmt.Sprintf("fetching %s page %d — %d repos", owner, m.fetchPage, m.fetchRepos)
+		}
+		return m.spinner.View() + " " + dimStyle.Render(line)
+	}
+	// Total known: determinate bar + descriptive line.
+	frac := float64(m.fetchPage) / float64(m.fetchTotal)
+	if frac > 1 {
+		frac = 1
+	}
+	bar := m.progress.ViewAs(frac)
+	line := fmt.Sprintf("fetching %s page %d/%d — %d repos",
+		owner, m.fetchPage, m.fetchTotal, m.fetchRepos)
+	return bar + "\n" + dimStyle.Render(line)
 }
 
 // renderStrings renders a simple string list with cursor highlighting, windowed

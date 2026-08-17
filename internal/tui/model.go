@@ -12,11 +12,14 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/charmbracelet/bubbles/progress"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/mipmip/skull2/internal/cache"
 	"github.com/mipmip/skull2/internal/config"
+	"github.com/mipmip/skull2/internal/fetch"
 	"github.com/mipmip/skull2/internal/provider"
 )
 
@@ -104,11 +107,29 @@ type Model struct {
 	// refresher re-fetches a provider's cache; nil disables refresh (tests).
 	refresher func(ctx context.Context, p *config.Provider) tea.Cmd
 	// ownerFetcher lazily fetches one owner's repos and caches them; nil disables
-	// lazy fetch (tests inject a fake or the ownerFetchedMsg directly).
+	// lazy fetch (tests inject a fake or the ownerFetchedMsg directly). Used as a
+	// fallback when progressFetcher is nil.
 	ownerFetcher func(ctx context.Context, p *config.Provider, owner string) tea.Cmd
+	// progressFetcher starts a streaming, page-aware fetch for one owner, returning
+	// the event channel and a cancel func. nil falls back to ownerFetcher. It is
+	// the production path; tests feed progressMsg directly.
+	progressFetcher func(ctx context.Context, p *config.Provider, owner string) (<-chan fetch.Event, context.CancelFunc)
 	// fetchingOwner is the owner currently being lazily fetched (for the loading
 	// line), or "" when none.
 	fetchingOwner string
+
+	// spinner is the indeterminate indicator shown until the total is known.
+	spinner spinner.Model
+	// progress is the determinate bar shown once the total page count is known.
+	progress progress.Model
+	// fetchTotal is the known total page count for the current fetch (0 = unknown).
+	fetchTotal int
+	// fetchPage is the number of pages completed so far for the current fetch.
+	fetchPage int
+	// fetchRepos is the running repo count for the current fetch.
+	fetchRepos int
+	// fetchCancel cancels the in-flight streaming fetch; nil when none.
+	fetchCancel context.CancelFunc
 
 	// checkCloned reports whether target already exists as a git repo. A var so
 	// tests can stub the filesystem check.
@@ -140,9 +161,14 @@ func New(cfg *config.Config) *Model {
 	m.filter.Placeholder = "fuzzy filter (owner/name)"
 	m.filter.Prompt = "/ "
 
+	m.spinner = spinner.New()
+	m.spinner.Spinner = spinner.Dot
+	m.progress = progress.New(progress.WithoutPercentage())
+
 	m.cloner = newEngineCloner(cfg)
 	m.refresher = defaultRefresher(cfg, m)
 	m.ownerFetcher = defaultOwnerFetcher(cfg)
+	m.progressFetcher = defaultProgressFetcher(cfg)
 
 	m.loadCaches()
 	return m

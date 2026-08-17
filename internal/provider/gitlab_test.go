@@ -23,6 +23,7 @@ func TestGitLabGroupSubgroupsPaginationMapping(t *testing.T) {
 		switch r.URL.Query().Get("page") {
 		case "1":
 			w.Header().Set("X-Next-Page", "2")
+			w.Header().Set("X-Total-Pages", "2")
 			fmt.Fprint(w, `[
 				{"name":"Alpha","path":"alpha","description":"a","ssh_url_to_repo":"git@gitlab.com:acme/alpha.git",
 				 "http_url_to_repo":"https://gitlab.com/acme/alpha.git","web_url":"https://gitlab.com/acme/alpha",

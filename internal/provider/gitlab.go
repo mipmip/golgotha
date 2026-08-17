@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/mipmip/skull2/internal/config"
+	"github.com/mipmip/skull2/internal/fetch"
 )
 
 // defaultGitLabAPI is the public GitLab v4 API base URL.
@@ -68,40 +70,92 @@ func NewGitLab(cfg config.Provider, httpClient *http.Client) *GitLab {
 
 // ListRepos returns projects for each configured group (including subgroups)
 // plus the authenticated user's membership projects when no owners are set,
-// mapped to the Repo model and filtered.
+// mapped to the Repo model and filtered. It is a thin wrapper over the
+// event-emitting FetchOwner.
 func (g *GitLab) ListRepos(ctx context.Context, owners []string) ([]Repo, error) {
+	return listReposOverFetch(ctx, owners, &g.cfg, g.FetchOwner)
+}
+
+// FetchOwner fetches a single group's projects (including subgroups) page by
+// page, emitting progress events through emit. An empty owner (config.SelfOwner)
+// fetches the authenticated user's membership projects. The total page count is
+// derived from the X-Total-Pages header when present.
+func (g *GitLab) FetchOwner(ctx context.Context, emit fetch.Emit, owner string) ([]Repo, error) {
 	token, err := ResolveToken(&g.cfg, g.getter, g.env)
 	if err != nil {
 		return nil, err
 	}
 
-	var paths []string
-	if len(owners) == 0 {
-		paths = append(paths, "/projects?membership=true")
+	var path string
+	if owner == config.SelfOwner {
+		path = "/projects?membership=true"
 	} else {
-		for _, owner := range owners {
-			paths = append(paths, fmt.Sprintf("/groups/%s/projects?include_subgroups=true", url.PathEscape(owner)))
-		}
+		path = fmt.Sprintf("/groups/%s/projects?include_subgroups=true", url.PathEscape(owner))
 	}
+	sep := "&"
+	if !strings.Contains(path, "?") {
+		sep = "?"
+	}
+	base := fmt.Sprintf("%s%s%sper_page=%d", g.base, path, sep, gitlabPageLimit)
 
-	var all []Repo
-	seen := make(map[string]struct{})
-	for _, p := range paths {
-		repos, err := g.listPath(ctx, token, p)
+	fetchPage := func(ctx context.Context, page int) (fetch.Page[Repo], error) {
+		u := fmt.Sprintf("%s&page=%d", base, page)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 		if err != nil {
-			return nil, err
+			return fetch.Page[Repo]{}, err
 		}
-		for _, r := range repos {
-			key := r.Owner + "/" + r.Name
-			if _, dup := seen[key]; dup {
-				continue
+		req.Header.Set("PRIVATE-TOKEN", token)
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := g.client.Do(req)
+		if err != nil {
+			return fetch.Page[Repo]{}, err
+		}
+		body, err := readAllAndClose(resp)
+		if err != nil {
+			return fetch.Page[Repo]{}, err
+		}
+		if resp.StatusCode != http.StatusOK {
+			return fetch.Page[Repo]{}, fmt.Errorf("gitlab: %s: %s: %s", path, resp.Status, strings.TrimSpace(string(body)))
+		}
+
+		var projects []glProject
+		if err := json.Unmarshal(body, &projects); err != nil {
+			return fetch.Page[Repo]{}, fmt.Errorf("gitlab: decoding response: %w", err)
+		}
+		items := make([]Repo, 0, len(projects))
+		for _, p := range projects {
+			ns := p.Namespace.FullPath
+			if ns == "" {
+				ns = p.Namespace.Path
 			}
-			seen[key] = struct{}{}
-			all = append(all, r)
+			items = append(items, Repo{
+				Owner:         ns,
+				Name:          p.Path,
+				Description:   p.Description,
+				SSHURL:        p.SSHURLToRepo,
+				HTTPSURL:      p.HTTPURLToRepo,
+				WebURL:        p.WebURL,
+				DefaultBranch: p.DefaultBranch,
+				Archived:      p.Archived,
+				Fork:          p.ForkedFromProject != nil,
+				UpdatedAt:     p.LastActivityAt,
+			})
 		}
+		out := fetch.Page[Repo]{Items: items}
+		if page == 1 {
+			if n, err := strconv.Atoi(resp.Header.Get("X-Total-Pages")); err == nil && n > 0 {
+				out.TotalPages = n
+			}
+		}
+		return out, nil
 	}
 
-	return FilterRepos(&g.cfg, all), nil
+	repos, err := fetch.Pages(ctx, emit, g.cfg.Name, owner, gitlabPageLimit, fetchPage, repoKey)
+	if err != nil {
+		return nil, err
+	}
+	return FilterRepos(&g.cfg, repos), nil
 }
 
 // ListOwners discovers the groups the authenticated user is a member of via
@@ -153,66 +207,6 @@ func (g *GitLab) ListOwners(ctx context.Context) ([]string, error) {
 			}
 			out = append(out, name)
 		}
-		page = resp.Header.Get("X-Next-Page")
-	}
-	return out, nil
-}
-
-// listPath fetches every page for a v4 endpoint path (with an existing query),
-// paginating via the X-Next-Page header.
-func (g *GitLab) listPath(ctx context.Context, token, path string) ([]Repo, error) {
-	sep := "&"
-	if !strings.Contains(path, "?") {
-		sep = "?"
-	}
-	base := fmt.Sprintf("%s%s%sper_page=%d", g.base, path, sep, gitlabPageLimit)
-
-	var out []Repo
-	page := "1"
-	for page != "" {
-		u := base + "&page=" + url.QueryEscape(page)
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("PRIVATE-TOKEN", token)
-		req.Header.Set("Accept", "application/json")
-
-		resp, err := g.client.Do(req)
-		if err != nil {
-			return nil, err
-		}
-		body, err := readAllAndClose(resp)
-		if err != nil {
-			return nil, err
-		}
-		if resp.StatusCode != http.StatusOK {
-			return nil, fmt.Errorf("gitlab: %s: %s: %s", path, resp.Status, strings.TrimSpace(string(body)))
-		}
-
-		var projects []glProject
-		if err := json.Unmarshal(body, &projects); err != nil {
-			return nil, fmt.Errorf("gitlab: decoding response: %w", err)
-		}
-		for _, p := range projects {
-			owner := p.Namespace.FullPath
-			if owner == "" {
-				owner = p.Namespace.Path
-			}
-			out = append(out, Repo{
-				Owner:         owner,
-				Name:          p.Path,
-				Description:   p.Description,
-				SSHURL:        p.SSHURLToRepo,
-				HTTPSURL:      p.HTTPURLToRepo,
-				WebURL:        p.WebURL,
-				DefaultBranch: p.DefaultBranch,
-				Archived:      p.Archived,
-				Fork:          p.ForkedFromProject != nil,
-				UpdatedAt:     p.LastActivityAt,
-			})
-		}
-
 		page = resp.Header.Get("X-Next-Page")
 	}
 	return out, nil

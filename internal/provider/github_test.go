@@ -20,7 +20,8 @@ func TestGitHubListReposPaginationAndMapping(t *testing.T) {
 		page := r.URL.Query().Get("page")
 		switch page {
 		case "", "1":
-			w.Header().Set("Link", fmt.Sprintf(`<%s/orgs/acme/repos?per_page=100&page=2>; rel="next"`, "http://"+r.Host))
+			host := "http://" + r.Host
+			w.Header().Set("Link", fmt.Sprintf(`<%s/orgs/acme/repos?per_page=100&page=2>; rel="next", <%s/orgs/acme/repos?per_page=100&page=2>; rel="last"`, host, host))
 			fmt.Fprint(w, `[
 				{"name":"alpha","description":"first","owner":{"login":"acme"},
 				 "ssh_url":"git@github.com:acme/alpha.git","clone_url":"https://github.com/acme/alpha.git",
