@@ -434,6 +434,39 @@ func (m *Model) ownersFor(p *config.Provider) []string {
 	return owners
 }
 
+// filtered returns the subset of items whose value fuzzy-matches the active
+// filter query, using match to derive the string matched against for each item.
+// An empty query returns the input unchanged. It keeps windowing/rendering
+// uniform across levels by centralizing the per-level narrowing.
+func filtered[T any](items []T, query string, match func(T) string) []T {
+	if query == "" {
+		return items
+	}
+	out := make([]T, 0, len(items))
+	for _, it := range items {
+		if fuzzyMatch(match(it), query) {
+			out = append(out, it)
+		}
+	}
+	return out
+}
+
+// visibleProviders returns the provider names for the providers level, narrowed
+// by the active fuzzy filter (matched against the raw provider name).
+func (m *Model) visibleProviders() []string {
+	return filtered(m.providerNames(), m.filter.Value(), func(s string) string { return s })
+}
+
+// visibleOwners returns the owner names for the selected provider, narrowed by
+// the active fuzzy filter. Matching is against the raw owner name, not any
+// decorated display label (e.g. "(not fetched)").
+func (m *Model) visibleOwners() []string {
+	if m.selProvider == nil {
+		return nil
+	}
+	return filtered(m.ownersFor(m.selProvider), m.filter.Value(), func(s string) string { return s })
+}
+
 // visibleRepos returns the repo items visible at the current scope. When the
 // filter query is non-empty it matches across the current scope (the selected
 // owner's repos, or the whole provider when no owner is chosen, or all
@@ -514,16 +547,14 @@ func (m *Model) sortRepos(items []repoItem) []repoItem {
 	return items
 }
 
-// rowCount returns the number of rows shown at the current level.
+// rowCount returns the number of rows shown at the current level, honoring the
+// active fuzzy filter which narrows the current level's items.
 func (m *Model) rowCount() int {
-	if m.filtering || m.filter.Value() != "" {
-		return len(m.visibleRepos())
-	}
 	switch m.nav {
 	case levelProviders:
-		return len(m.providers)
+		return len(m.visibleProviders())
 	case levelOwners:
-		return len(m.ownersFor(m.selProvider))
+		return len(m.visibleOwners())
 	default:
 		return len(m.visibleRepos())
 	}
@@ -574,10 +605,11 @@ func (m *Model) halfPageStep() int {
 	return step
 }
 
-// currentRepo returns the highlighted repo item when at the repos level (or when
-// the filter is active). ok is false when there is no such row.
+// currentRepo returns the highlighted repo item when at the repos level. ok is
+// false when there is no such row. The fuzzy filter narrows the repo list at
+// this level but does not flatten other levels into repos.
 func (m *Model) currentRepo() (repoItem, bool) {
-	if !(m.nav == levelRepos || m.filter.Value() != "" || m.filtering) {
+	if m.nav != levelRepos {
 		return repoItem{}, false
 	}
 	repos := m.visibleRepos()

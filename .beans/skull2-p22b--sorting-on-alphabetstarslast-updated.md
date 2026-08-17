@@ -1,11 +1,11 @@
 ---
 # skull2-p22b
 title: sorting on alphabet/last-updated
-status: in-progress
+status: completed
 type: task
 priority: normal
 created_at: 2026-08-17T18:15:32Z
-updated_at: 2026-08-17T20:37:35Z
+updated_at: 2026-08-17T20:42:25Z
 parent: skull2-qati
 ---
 
@@ -29,3 +29,7 @@ field across all three providers) — see the sibling stars bean.
   `visibleRepos()`; sort runs after the filter step.
 
 Out of scope: stars sorting; sorting the owner list (already alphabetical).
+
+## Summary of Changes
+
+Shipped via add-repo-sort (commit 65397357). TUI repo sort by name and last-updated: s cycles the key (none -> name -> updated), S reverses direction; sort runs after the facet+fuzzy filter (on a copy, preserving fetch order for none); active sort shown in the footer. Overall coverage 80.5%.

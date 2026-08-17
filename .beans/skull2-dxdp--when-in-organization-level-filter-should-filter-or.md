@@ -1,11 +1,11 @@
 ---
 # skull2-dxdp
 title: when in organization level, filter should filter orgs
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-08-17T18:56:29Z
-updated_at: 2026-08-17T19:46:33Z
+updated_at: 2026-08-17T20:42:25Z
 parent: skull2-qati
 ---
 

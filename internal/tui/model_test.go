@@ -127,14 +127,21 @@ func TestCursorMovementClamps(t *testing.T) {
 	}
 }
 
-func TestFilterNarrowsList(t *testing.T) {
+func TestFilterNarrowsReposAtReposLevel(t *testing.T) {
 	m, _ := newTestModel(t)
+	// Drill into github > mipmip (skull2, dotfiles).
+	send(m, key("enter")) // owners
+	send(m, key("j"))     // mipmip
+	send(m, key("enter")) // repos of mipmip
+	if m.selOwner != "mipmip" {
+		t.Fatalf("expected mipmip owner, got %q", m.selOwner)
+	}
 	// activate filter
 	send(m, key("/"))
 	if !m.filtering {
 		t.Fatal("expected filtering active")
 	}
-	// type "skull" -> only mipmip/skull2 across all providers
+	// type "skull" -> only mipmip/skull2
 	for _, r := range "skull" {
 		send(m, key(string(r)))
 	}
@@ -154,6 +161,105 @@ func TestFilterNarrowsList(t *testing.T) {
 	send(m, key("esc"))
 	if m.filter.Value() != "" {
 		t.Fatalf("expected filter cleared, got %q", m.filter.Value())
+	}
+}
+
+func TestFilterNarrowsProvidersAtProvidersLevel(t *testing.T) {
+	m, _ := newTestModel(t)
+	send(m, key("/"))
+	for _, r := range "code" {
+		send(m, key(string(r)))
+	}
+	got := m.visibleProviders()
+	if len(got) != 1 || got[0] != "codeberg" {
+		t.Fatalf("expected only codeberg, got %v", got)
+	}
+}
+
+func TestFilterNarrowsOwnersAtOwnersLevel(t *testing.T) {
+	m, _ := newTestModel(t)
+	send(m, key("enter")) // into github owners (acme, mipmip)
+	send(m, key("/"))
+	for _, r := range "mip" {
+		send(m, key(string(r)))
+	}
+	got := m.visibleOwners()
+	if len(got) != 1 || got[0] != "mipmip" {
+		t.Fatalf("expected only mipmip, got %v", got)
+	}
+}
+
+func TestFilterEnterDrillsFilteredOwner(t *testing.T) {
+	m, _ := newTestModel(t)
+	send(m, key("enter")) // into github owners (acme, mipmip)
+	send(m, key("/"))
+	for _, r := range "mip" {
+		send(m, key(string(r)))
+	}
+	// Leave filter-input mode (still level-aware, filtered to mipmip only).
+	send(m, key("enter"))
+	if m.filtering {
+		t.Fatal("expected filtering mode to end on enter")
+	}
+	// cursor is at 0 -> the only filtered owner (mipmip). Enter drills in.
+	send(m, key("enter"))
+	if m.nav != levelRepos || m.selOwner != "mipmip" {
+		t.Fatalf("expected repos level for mipmip, got nav=%d owner=%q", m.nav, m.selOwner)
+	}
+	// Drilling in clears the filter.
+	if m.filter.Value() != "" {
+		t.Fatalf("expected filter cleared on drill-in, got %q", m.filter.Value())
+	}
+	repos := m.visibleRepos()
+	if len(repos) != 2 {
+		t.Fatalf("expected mipmip's 2 repos, got %v", repos)
+	}
+}
+
+func TestFilterMatchesRawOwnerNotDecoration(t *testing.T) {
+	m, _ := newLazyModel(t)
+	send(m, key("enter")) // into provider owners (acme fetched, beta not fetched)
+	// "beta" carries a "(not fetched)" decoration in the rendered label; the
+	// filter must match the raw name, and must NOT be satisfiable via the
+	// decoration text (e.g. "notfetched").
+	send(m, key("/"))
+	for _, r := range "beta" {
+		send(m, key(string(r)))
+	}
+	got := m.visibleOwners()
+	if len(got) != 1 || got[0] != "beta" {
+		t.Fatalf("expected only beta, got %v", got)
+	}
+	// A query that only exists in the decoration must not match anything.
+	m.filter.SetValue("notfetched")
+	if got := m.visibleOwners(); len(got) != 0 {
+		t.Fatalf("expected no owners for decoration-only query, got %v", got)
+	}
+}
+
+func TestFilterClearsOnBack(t *testing.T) {
+	m, _ := newTestModel(t)
+	send(m, key("enter")) // into github owners
+	send(m, key("/"))
+	for _, r := range "mip" {
+		send(m, key(string(r)))
+	}
+	send(m, key("enter")) // leave filter-input mode, query kept
+	if m.filter.Value() == "" {
+		t.Fatal("expected filter query kept after applying")
+	}
+	// Back clears the filter first (stays at owners level).
+	send(m, key("esc"))
+	if m.filter.Value() != "" {
+		t.Fatalf("expected filter cleared on back, got %q", m.filter.Value())
+	}
+	if m.nav != levelOwners {
+		t.Fatalf("expected still at owners level, got nav=%d", m.nav)
+	}
+	// Back again pops to providers, unfiltered.
+	send(m, key("esc"))
+	if m.nav != levelProviders {
+		t.Fatalf("expected providers level, got nav=%d", m.nav)
 	}
 }
 

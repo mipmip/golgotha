@@ -428,7 +428,7 @@ func cacheIncludesForks(p *config.Provider) bool {
 // goBack pops the navigation stack, or clears an active filter first.
 func (m *Model) goBack() (tea.Model, tea.Cmd) {
 	if m.filter.Value() != "" {
-		m.filter.SetValue("")
+		m.clearFilter()
 		m.cursor = 0
 		m.offset = 0
 		m.clampCursor()
@@ -455,27 +455,27 @@ func (m *Model) goBack() (tea.Model, tea.Cmd) {
 }
 
 // enter drills into the highlighted row, opening the detail view at the repo
-// level. Enter now consistently means "drill deeper"; cloning is on `c`.
+// level. Enter consistently means "drill deeper"; cloning is on `c`. The fuzzy
+// filter is level-aware: Enter drills the highlighted item from the filtered
+// list at the current level, and the filter clears on any level change.
 func (m *Model) enter() (tea.Model, tea.Cmd) {
-	// With an active filter we operate on the flattened repo view directly:
-	// Enter opens the highlighted repo's detail view.
-	if m.filter.Value() != "" {
-		return m.openDetail()
-	}
 	switch m.nav {
 	case levelProviders:
-		if m.cursor >= 0 && m.cursor < len(m.providers) {
-			m.selProvider = m.providers[m.cursor]
+		providers := m.visibleProviders()
+		if m.cursor >= 0 && m.cursor < len(providers) {
+			m.selProvider = m.providerByName(providers[m.cursor])
 			m.nav = levelOwners
+			m.clearFilter()
 			m.cursor = 0
 			m.offset = 0
 			m.clampCursor()
 		}
 	case levelOwners:
-		owners := m.ownersFor(m.selProvider)
+		owners := m.visibleOwners()
 		if m.cursor >= 0 && m.cursor < len(owners) {
 			m.selOwner = owners[m.cursor]
 			m.nav = levelRepos
+			m.clearFilter()
 			m.cursor = 0
 			m.offset = 0
 			m.clampCursor()
@@ -485,6 +485,24 @@ func (m *Model) enter() (tea.Model, tea.Cmd) {
 		return m.openDetail()
 	}
 	return m, nil
+}
+
+// providerByName returns the configured provider with the given name, or nil.
+func (m *Model) providerByName(name string) *config.Provider {
+	for _, p := range m.providers {
+		if p.Name == name {
+			return p
+		}
+	}
+	return nil
+}
+
+// clearFilter resets the active fuzzy filter (query and input state). It is
+// called on any navigation level change so each level starts unfiltered.
+func (m *Model) clearFilter() {
+	m.filtering = false
+	m.filter.SetValue("")
+	m.filter.Blur()
 }
 
 // openDetail opens the detail view for the highlighted repository. It restores
@@ -716,8 +734,9 @@ func (m *Model) cancelFetch() {
 // or highlighted provider. It is a no-op when the relevant seam is disabled
 // (tests) or nothing is selected.
 func (m *Model) refresh() (tea.Model, tea.Cmd) {
-	// At the repos level, `r` re-fetches the current owner.
-	if m.nav == levelRepos && m.selProvider != nil && m.filter.Value() == "" {
+	// At the repos level, `r` re-fetches the current owner (the level-aware
+	// filter only narrows this owner's repos, so it stays the current owner).
+	if m.nav == levelRepos && m.selProvider != nil {
 		if cmd := m.forceFetchOwner(m.selProvider, m.selOwner); cmd != nil {
 			return m, cmd
 		}

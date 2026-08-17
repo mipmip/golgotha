@@ -65,16 +65,15 @@ func (m *Model) headerText() string {
 	return crumb
 }
 
-// bodyText renders the list of rows for the current level.
+// bodyText renders the list of rows for the current level. The fuzzy filter is
+// level-aware: it narrows the current level's items rather than flattening to a
+// repository search.
 func (m *Model) bodyText() string {
-	if m.filtering || m.filter.Value() != "" {
-		return m.renderRepos(m.visibleRepos())
-	}
 	switch m.nav {
 	case levelProviders:
-		return m.renderStrings(m.providerNames())
+		return m.renderStrings(m.visibleProviders())
 	case levelOwners:
-		owners := m.ownersFor(m.selProvider)
+		owners := m.visibleOwners()
 		labels := make([]string, len(owners))
 		for i, o := range owners {
 			labels[i] = ownerLabel(o)
