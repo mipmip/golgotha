@@ -16,6 +16,8 @@
 coverage.*
 *.coverprofile
 profile.cov
+# ...but keep the coverage gate script (matched by coverage.* above)
+!scripts/coverage.sh
 
 # Dependency directories (remove the comment below to include it)
 # vendor/

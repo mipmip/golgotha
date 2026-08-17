@@ -157,6 +157,67 @@ func TestSaveThenLoadDefaultProviderMissingReadError(t *testing.T) {
 	}
 }
 
+func TestSaveRenameError(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", dir)
+	cdir := filepath.Join(dir, "skull2")
+	// Pre-create the final path as a directory so os.Rename(tmpfile, final) fails.
+	if err := os.MkdirAll(filepath.Join(cdir, "github.json"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := Save("github", Cache{FetchedAt: time.Now()}); err == nil {
+		t.Fatal("expected rename error when final path is a directory")
+	}
+	// No temp file must be left behind after the failed rename.
+	entries, err := os.ReadDir(cdir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if filepath.Ext(e.Name()) == ".tmp" {
+			t.Fatalf("temp file left behind after failed rename: %s", e.Name())
+		}
+	}
+}
+
+func TestSaveOverwritesExisting(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", dir)
+
+	if err := Save("gh", Cache{Repos: []provider.Repo{{Name: "first"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := Save("gh", Cache{Repos: []provider.Repo{{Name: "second"}}}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load("gh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Repos) != 1 || got.Repos[0].Name != "second" {
+		t.Fatalf("save did not overwrite: %+v", got.Repos)
+	}
+}
+
+func TestSaveTempCreateError(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", dir)
+	cdir := filepath.Join(dir, "skull2")
+	if err := os.MkdirAll(cdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Remove write/execute perms so CreateTemp inside the dir fails.
+	if err := os.Chmod(cdir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(cdir, 0o755) })
+	err := Save("gh", Cache{FetchedAt: time.Now()})
+	if err == nil {
+		// Running as root ignores mode bits; skip rather than fail spuriously.
+		t.Skip("temp-file creation succeeded despite mode; likely running as root")
+	}
+}
+
 func TestDirErrorWhenHomeUnresolvable(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", "")
 	t.Setenv("HOME", "")

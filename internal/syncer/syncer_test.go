@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/mipmip/skull2/internal/config"
@@ -392,6 +393,74 @@ func TestFakeBadTemplateFails(t *testing.T) {
 	}
 }
 
+func TestCloneRepoClonesMissing(t *testing.T) {
+	bare := makeBareRemote(t)
+	base := t.TempDir()
+	cfg, p := newConfig(base)
+	eng := testEngine(t, cfg)
+
+	res := eng.CloneRepo(context.Background(), p, provider.Repo{
+		Owner: "acme", Name: "widget", SSHURL: bare, DefaultBranch: "main",
+	})
+	if res.Action != ActionCloned || res.Err != nil {
+		t.Fatalf("want cloned, got %+v", res)
+	}
+	target := filepath.Join(base, "acme", "widget")
+	if res.Path != target {
+		t.Fatalf("path = %q want %q", res.Path, target)
+	}
+	if _, err := os.Stat(filepath.Join(target, ".git")); err != nil {
+		t.Fatalf("expected clone at %s: %v", target, err)
+	}
+}
+
+func TestCloneRepoSkipsExisting(t *testing.T) {
+	cfg, p := fakeCfg()
+	dir := "/base/o/r"
+	f := &fakeGit{repos: map[string]bool{dir: true}}
+	res := NewEngine(f, cfg).CloneRepo(context.Background(), p, provider.Repo{
+		Owner: "o", Name: "r", SSHURL: "url", DefaultBranch: "main",
+	})
+	if res.Action != ActionSkipped || res.Warning == "" {
+		t.Fatalf("want skipped with warning, got %+v", res)
+	}
+	if len(f.cloned) != 0 {
+		t.Fatalf("existing repo should not be cloned, got %v", f.cloned)
+	}
+}
+
+func TestCloneRepoBadTemplateFails(t *testing.T) {
+	cfg, p := fakeCfg()
+	cfg.ClonePatternTpl = "{{.Nope}}"
+	res := NewEngine(&fakeGit{}, cfg).CloneRepo(context.Background(), p, provider.Repo{
+		Owner: "o", Name: "r", SSHURL: "url",
+	})
+	if res.Action != ActionFailed || res.Err == nil {
+		t.Fatalf("want failed on bad template, got %+v", res)
+	}
+}
+
+func TestCloneRepoMissingURLFails(t *testing.T) {
+	cfg, p := fakeCfg()
+	res := NewEngine(&fakeGit{}, cfg).CloneRepo(context.Background(), p, provider.Repo{
+		Owner: "o", Name: "r", // no SSHURL
+	})
+	if res.Action != ActionFailed || res.Err == nil {
+		t.Fatalf("want failed on missing URL, got %+v", res)
+	}
+}
+
+func TestCloneRepoCloneErrorFails(t *testing.T) {
+	cfg, p := fakeCfg()
+	f := &fakeGit{cloneErr: errors.New("boom")}
+	res := NewEngine(f, cfg).CloneRepo(context.Background(), p, provider.Repo{
+		Owner: "o", Name: "r", SSHURL: "url",
+	})
+	if res.Action != ActionFailed || res.Err == nil {
+		t.Fatalf("want failed on clone error, got %+v", res)
+	}
+}
+
 func TestSummaryAggregates(t *testing.T) {
 	s := &Summary{Providers: []ProviderSummary{
 		{Provider: "a", Cloned: 1, Updated: 2, Skipped: 0, Failed: 1},
@@ -442,5 +511,58 @@ func TestExecGitIsRepoAndDefaultBranch(t *testing.T) {
 	}
 	if err := g.Fetch(ctx, target); err != nil {
 		t.Fatalf("fetch: %v", err)
+	}
+}
+
+func TestExecGitBinDefault(t *testing.T) {
+	if got := (&ExecGit{}).bin(); got != "git" {
+		t.Fatalf("empty Bin should default to git, got %q", got)
+	}
+	if got := (&ExecGit{Bin: "custom-git"}).bin(); got != "custom-git" {
+		t.Fatalf("explicit Bin ignored, got %q", got)
+	}
+}
+
+func TestExecGitRunErrorIncludesStderr(t *testing.T) {
+	dir := t.TempDir() // not a git repo
+	g := NewExecGit()
+	// `git status` in a non-repo dir fails and writes to stderr.
+	_, err := g.run(context.Background(), dir, "status", "--porcelain")
+	if err == nil {
+		t.Fatal("expected error running git status outside a repo")
+	}
+	if !strings.Contains(err.Error(), "git status") {
+		t.Fatalf("error should name the command: %v", err)
+	}
+}
+
+func TestExecGitIsDirtyErrorPropagates(t *testing.T) {
+	dir := t.TempDir() // not a git repo
+	g := NewExecGit()
+	if _, err := g.IsDirty(context.Background(), dir); err == nil {
+		t.Fatal("expected IsDirty error outside a repo")
+	}
+}
+
+func TestExecGitCloneParentDirError(t *testing.T) {
+	// Make the parent path a regular file so MkdirAll fails.
+	root := t.TempDir()
+	file := filepath.Join(root, "afile")
+	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	g := NewExecGit()
+	// dir's parent is <file>/sub which cannot be created.
+	err := g.Clone(context.Background(), "irrelevant", filepath.Join(file, "sub", "clone"))
+	if err == nil {
+		t.Fatal("expected clone to fail creating parent dir under a file")
+	}
+}
+
+func TestExecGitCurrentDefaultBranchError(t *testing.T) {
+	dir := t.TempDir() // not a git repo
+	g := NewExecGit()
+	if _, err := g.CurrentDefaultBranch(context.Background(), dir); err == nil {
+		t.Fatal("expected error resolving default branch outside a repo")
 	}
 }

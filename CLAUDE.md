@@ -35,7 +35,11 @@ go build ./...
 go test ./...
 go test -cover ./...
 gofmt -l .             # must be empty
+bash scripts/coverage.sh   # coverage gate: overall >=70%, core >=80%
 ```
+
+The coverage gate (`scripts/coverage.sh`) is enforced by the
+`checks.coverage` flake output, so `nix flake check` fails below threshold.
 
 When you add third-party dependencies, update `flake.nix` `vendorHash` (nix
 prints the expected hash on the first failing build).

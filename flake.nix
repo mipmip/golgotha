@@ -53,18 +53,23 @@
         # Build check.
         build = self.packages.${pkgs.system}.default;
 
-        # Test check. The coverage gate (>=70% overall, >=80% core) is wired in
-        # here during milestone "05 Testing, e2e & coverage".
-        gotest = self.packages.${pkgs.system}.default.overrideAttrs (old: {
-          pname = "skull2-tests";
+        # Test + coverage gate: runs the whole suite (incl. e2e) via
+        # scripts/coverage.sh and fails below >=70% overall / >=80% core.
+        coverage = self.packages.${pkgs.system}.default.overrideAttrs (old: {
+          pname = "skull2-coverage";
           doCheck = true;
           # Sync/e2e tests shell out to git against local temp repos.
-          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.git ];
+          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.git pkgs.bash ];
           preCheck = ''
             export HOME=$(mktemp -d)
             git config --global user.email test@skull2.invalid
             git config --global user.name "skull2 tests"
             git config --global init.defaultBranch main
+          '';
+          checkPhase = ''
+            runHook preCheck
+            bash scripts/coverage.sh
+            runHook postCheck
           '';
         });
       });
