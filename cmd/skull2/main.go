@@ -15,6 +15,7 @@ import (
 	"github.com/mipmip/skull2/internal/cache"
 	"github.com/mipmip/skull2/internal/config"
 	"github.com/mipmip/skull2/internal/provider"
+	"github.com/mipmip/skull2/internal/syncer"
 )
 
 // version is overridden at build time via -ldflags "-X main.version=...".
@@ -44,6 +45,8 @@ func run(args []string) error {
 		return runConfig(args[1:])
 	case "refresh":
 		return runRefresh(args[1:])
+	case "sync":
+		return runSync(args[1:])
 	default:
 		usage(os.Stderr)
 		return fmt.Errorf("unknown command %q", cmd)
@@ -90,36 +93,28 @@ func runConfig(args []string) error {
 	}
 }
 
-// runRefresh handles the `refresh` subcommand: re-fetch repositories from each
-// configured provider and update the per-provider JSON cache.
-func runRefresh(args []string) error {
-	fs := flag.NewFlagSet("refresh", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	providerName := fs.String("provider", "", "refresh only the named provider")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-
-	cfg, err := config.Load()
-	if err != nil {
-		return err
-	}
-
-	reg := provider.NewDefaultRegistry()
-
+// selectProviders returns the configured providers filtered to providerName when
+// set. An unknown providerName yields an error.
+func selectProviders(cfg *config.Config, providerName string) ([]*config.Provider, error) {
 	selected := make([]*config.Provider, 0, len(cfg.Providers))
 	for i := range cfg.Providers {
 		p := &cfg.Providers[i]
-		if *providerName != "" && p.Name != *providerName {
+		if providerName != "" && p.Name != providerName {
 			continue
 		}
 		selected = append(selected, p)
 	}
-	if *providerName != "" && len(selected) == 0 {
-		return fmt.Errorf("unknown provider %q", *providerName)
+	if providerName != "" && len(selected) == 0 {
+		return nil, fmt.Errorf("unknown provider %q", providerName)
 	}
+	return selected, nil
+}
 
-	ctx := context.Background()
+// refreshProviders re-fetches repositories for the selected providers and writes
+// each per-provider JSON cache. It logs per-provider results and returns the
+// first error encountered without aborting the run.
+func refreshProviders(ctx context.Context, selected []*config.Provider) error {
+	reg := provider.NewDefaultRegistry()
 	var firstErr error
 	for _, p := range selected {
 		client, err := reg.Build(p)
@@ -150,6 +145,115 @@ func runRefresh(args []string) error {
 	return firstErr
 }
 
+// runRefresh handles the `refresh` subcommand: re-fetch repositories from each
+// configured provider and update the per-provider JSON cache.
+func runRefresh(args []string) error {
+	fs := flag.NewFlagSet("refresh", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	providerName := fs.String("provider", "", "refresh only the named provider")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+
+	selected, err := selectProviders(cfg, *providerName)
+	if err != nil {
+		return err
+	}
+
+	return refreshProviders(context.Background(), selected)
+}
+
+// runSync handles the `sync` subcommand: optionally refresh the cache, then
+// clone missing and fast-forward-pull existing repositories for each selected
+// provider. It logs one line per repository action plus a per-provider summary
+// and exits non-zero if any repository failed.
+func runSync(args []string) error {
+	fs := flag.NewFlagSet("sync", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	providerName := fs.String("provider", "", "sync only the named provider")
+	noRefresh := fs.Bool("no-refresh", false, "skip refreshing the cache before syncing")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+
+	selected, err := selectProviders(cfg, *providerName)
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+
+	if !*noRefresh {
+		// Refresh errors are logged but do not abort the sync; we still act on
+		// whatever cache is available.
+		if err := refreshProviders(ctx, selected); err != nil {
+			fmt.Fprintf(os.Stderr, "skull2: refresh reported errors: %v\n", err)
+		}
+	}
+
+	engine := syncer.NewEngine(syncer.NewExecGit(), cfg)
+
+	var summary syncer.Summary
+	for _, p := range selected {
+		c, ok, err := cache.LoadOrEmpty(p.Name)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "skull2: %s: %v\n", p.Name, err)
+			summary.Providers = append(summary.Providers, syncer.ProviderSummary{Provider: p.Name})
+			continue
+		}
+		if !ok {
+			fmt.Fprintf(os.Stderr, "skull2: %s: no cache; run 'skull2 refresh' first\n", p.Name)
+			summary.Providers = append(summary.Providers, syncer.ProviderSummary{Provider: p.Name})
+			continue
+		}
+
+		repos := provider.FilterRepos(p, c.Repos)
+		ps := engine.SyncProvider(ctx, p, repos)
+		logProviderSummary(ps)
+		summary.Providers = append(summary.Providers, ps)
+	}
+
+	cloned, updated, skipped, failed := summary.Totals()
+	fmt.Printf("total: %d cloned, %d updated, %d skipped, %d failed\n", cloned, updated, skipped, failed)
+
+	if summary.HasFailures() {
+		return fmt.Errorf("%d repositories failed", failed)
+	}
+	return nil
+}
+
+// logProviderSummary prints one line per repository action followed by a
+// provider summary line.
+func logProviderSummary(ps syncer.ProviderSummary) {
+	for _, r := range ps.Results {
+		name := r.Repo.Owner + "/" + r.Repo.Name
+		switch r.Action {
+		case syncer.ActionCloned:
+			fmt.Printf("%s: cloned %s -> %s\n", ps.Provider, name, r.Path)
+		case syncer.ActionUpdated:
+			fmt.Printf("%s: updated %s\n", ps.Provider, name)
+		case syncer.ActionSkipped:
+			fmt.Printf("%s: skipped %s (%s)\n", ps.Provider, name, r.Warning)
+			fmt.Fprintf(os.Stderr, "skull2: %s: warning: %s\n", ps.Provider, r.Warning)
+		case syncer.ActionFailed:
+			fmt.Printf("%s: failed %s\n", ps.Provider, name)
+			fmt.Fprintf(os.Stderr, "skull2: %s: %s: %v\n", ps.Provider, name, r.Err)
+		}
+	}
+	fmt.Printf("%s: %d cloned, %d updated, %d skipped, %d failed\n",
+		ps.Provider, ps.Cloned, ps.Updated, ps.Skipped, ps.Failed)
+}
+
 func usage(w io.Writer) {
 	fmt.Fprintf(w, `skull2 %s - multi-provider git portfolio manager
 
@@ -158,7 +262,7 @@ Usage:
 
 Commands:
   tui              Browse and clone repositories (default, planned)
-  sync             Clone missing and fast-forward-pull existing repos (planned)
+  sync             Clone missing and fast-forward-pull existing repos
   refresh          Refresh the per-provider cache (planned)
   config           Show or validate configuration (planned)
   version          Print the version
