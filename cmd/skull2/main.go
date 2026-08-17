@@ -12,6 +12,7 @@ import (
 	"os"
 	"time"
 
+	skull2 "github.com/mipmip/skull2"
 	"github.com/mipmip/skull2/internal/cache"
 	"github.com/mipmip/skull2/internal/config"
 	"github.com/mipmip/skull2/internal/provider"
@@ -19,8 +20,20 @@ import (
 	"github.com/mipmip/skull2/internal/tui"
 )
 
-// version is overridden at build time via -ldflags "-X main.version=...".
-var version = "0.0.0-dev"
+// version is set at build time via -ldflags "-X main.version=..." (goreleaser
+// injects the git tag). When empty (dev builds), it falls back to the value
+// embedded from the VERSION file — the single source of truth. See
+// resolveVersion; the ldflags value wins when set.
+var version = ""
+
+// resolveVersion returns the ldflags-injected version when present, otherwise
+// the version embedded from the VERSION file.
+func resolveVersion() string {
+	if version != "" {
+		return version
+	}
+	return skull2.Version
+}
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -37,7 +50,7 @@ func run(args []string) error {
 
 	switch cmd {
 	case "version", "--version", "-v":
-		fmt.Println("skull2", version)
+		fmt.Println("skull2", resolveVersion())
 		return nil
 	case "help", "-h", "--help":
 		usage(os.Stdout)
@@ -380,5 +393,5 @@ Commands:
   help             Show this help
 
 See BRIEFING.md for the full design and 'beans list' for the build roadmap.
-`, version)
+`, resolveVersion())
 }

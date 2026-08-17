@@ -15,7 +15,9 @@
       forAllSystems = f:
         nixpkgs.lib.genAttrs supportedSystems (system: f (import nixpkgs { inherit system; }));
 
-      version = "0.0.0-dev";
+      # Single source of truth: read from the VERSION file (trim trailing
+      # newline). Same file the Go binary embeds and goreleaser overrides.
+      version = builtins.replaceStrings [ "\n" ] [ "" ] (builtins.readFile ./VERSION);
     in
     {
       packages = forAllSystems (pkgs: {
@@ -45,6 +47,8 @@
             pkgs.golangci-lint
             pkgs.git
             pkgs.jujutsu
+            pkgs.goreleaser
+            pkgs.gum
           ];
         };
       });

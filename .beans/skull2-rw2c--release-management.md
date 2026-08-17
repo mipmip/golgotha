@@ -1,11 +1,11 @@
 ---
 # skull2-rw2c
 title: release-management
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-08-17T19:05:30Z
-updated_at: 2026-08-17T19:36:53Z
+updated_at: 2026-08-17T20:48:39Z
 parent: skull2-qati
 ---
 

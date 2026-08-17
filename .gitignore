@@ -37,3 +37,6 @@ go.work.sum
 result
 result-*
 .direnv/
+
+# goreleaser build output
+dist/

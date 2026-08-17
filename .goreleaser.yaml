@@ -1,0 +1,49 @@
+# goreleaser configuration for skull2.
+# Docs: https://goreleaser.com
+#
+# The flake owns reproducible dev/build; goreleaser owns the release artifacts
+# (cross-compiled binaries, archives, checksums, GitHub release). The version is
+# injected from the git tag into main.version via ldflags, overriding the
+# VERSION-file default embedded in the binary.
+version: 2
+
+project_name: skull2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: skull2
+    main: ./cmd/skull2
+    binary: skull2
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - id: skull2
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-snapshot"
+
+changelog:
+  disable: true
+
+release:
+  github:
+    owner: mipmip
+    name: skull2
