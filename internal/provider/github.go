@@ -100,6 +100,51 @@ func (g *GitHub) ListRepos(ctx context.Context, owners []string) ([]Repo, error)
 	return FilterRepos(&g.cfg, all), nil
 }
 
+// ListOwners discovers the authenticated user's organizations via /user/orgs,
+// following Link-header pagination. It returns the org login names.
+func (g *GitHub) ListOwners(ctx context.Context) ([]string, error) {
+	token, err := ResolveToken(&g.cfg, g.getter, g.env)
+	if err != nil {
+		return nil, err
+	}
+
+	type ghOrg struct {
+		Login string `json:"login"`
+	}
+	next := g.base + "/user/orgs?per_page=100"
+	var out []string
+	for next != "" {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, next, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Accept", "application/vnd.github+json")
+		req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+		resp, err := g.client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		body, err := readAllAndClose(resp)
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("github: %s: %s: %s", req.URL.Path, resp.Status, strings.TrimSpace(string(body)))
+		}
+		var page []ghOrg
+		if err := json.Unmarshal(body, &page); err != nil {
+			return nil, fmt.Errorf("github: decoding orgs: %w", err)
+		}
+		for _, o := range page {
+			out = append(out, o.Login)
+		}
+		next = nextLink(resp.Header.Get("Link"))
+	}
+	return out, nil
+}
+
 // listPath fetches every page starting at path (an absolute API path with query),
 // following the Link header for pagination.
 func (g *GitHub) listPath(ctx context.Context, token, path string) ([]Repo, error) {

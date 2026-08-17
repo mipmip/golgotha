@@ -101,6 +101,57 @@ func (c *Codeberg) ListRepos(ctx context.Context, owners []string) ([]Repo, erro
 	return FilterRepos(&c.cfg, all), nil
 }
 
+// ListOwners discovers the authenticated user's organizations via
+// /api/v1/user/orgs, paginating until a short page. It returns org usernames.
+func (c *Codeberg) ListOwners(ctx context.Context) ([]string, error) {
+	token, err := ResolveToken(&c.cfg, c.getter, c.env)
+	if err != nil {
+		return nil, err
+	}
+
+	type giteaOrg struct {
+		Username string `json:"username"`
+		Name     string `json:"name"`
+	}
+	var out []string
+	for page := 1; ; page++ {
+		u := fmt.Sprintf("%s/api/v1/user/orgs?limit=%d&page=%d", c.base, codebergPageLimit, page)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "token "+token)
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := c.client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		body, err := readAllAndClose(resp)
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("codeberg: /api/v1/user/orgs: %s: %s", resp.Status, strings.TrimSpace(string(body)))
+		}
+		var orgs []giteaOrg
+		if err := json.Unmarshal(body, &orgs); err != nil {
+			return nil, fmt.Errorf("codeberg: decoding orgs: %w", err)
+		}
+		for _, o := range orgs {
+			name := o.Username
+			if name == "" {
+				name = o.Name
+			}
+			out = append(out, name)
+		}
+		if codebergIsLastPage(resp.Header, page, len(orgs)) {
+			break
+		}
+	}
+	return out, nil
+}
+
 // listPath fetches every page for path, paginating via ?page/&limit until a
 // short (or empty) page is returned.
 func (c *Codeberg) listPath(ctx context.Context, token, path string) ([]Repo, error) {

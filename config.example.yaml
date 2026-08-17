@@ -30,5 +30,21 @@ providers:
     #
     # owners:
     #   - TechNative-B-V
+    #
+    # all_owners: discover every org you belong to automatically (plus your
+    # own account) instead of naming each in `owners`. Default false.
+    # `sync`/`refresh` eagerly fetch repos for every discovered owner; the TUI
+    # lists owners immediately and fetches each on first entry. Any explicit
+    # `owners` above are unioned in. Requires an org-read token scope (GitHub
+    # read:org) or discovery finds nothing and skull2 warns.
+    #
+    # all_owners: true
+    #
+    # exclude_owners: ignore specific owners by name (case-insensitive). Use the
+    # special token "self" to exclude your own account when all_owners is on.
+    #
+    # exclude_owners:
+    #   - noisy-org
+    #   - self
     include_archived: false      # default false
     include_forks: true          # default true

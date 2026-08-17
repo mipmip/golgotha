@@ -254,3 +254,109 @@ func TestPath(t *testing.T) {
 		t.Fatalf("path = %q", p)
 	}
 }
+
+func TestOwnerIndexRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", dir)
+
+	now := time.Date(2024, 5, 6, 7, 8, 9, 0, time.UTC)
+	var c Cache
+	c.SetOwners(now, []string{"", "acme", "beta"}) // "" = SelfOwner
+	c.MarkOwnerFetched("acme", []provider.Repo{{Owner: "acme", Name: "alpha"}}, now)
+
+	if err := Save("gh", c); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load("gh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Owners) != 3 {
+		t.Fatalf("owners = %+v", got.Owners)
+	}
+	if !got.OwnerFetched("acme") {
+		t.Fatal("acme should be fetched")
+	}
+	if got.OwnerFetched("beta") {
+		t.Fatal("beta should be unfetched")
+	}
+	if unf := got.UnfetchedOwners(); len(unf) != 2 {
+		t.Fatalf("unfetched = %v, want self+beta", unf)
+	}
+	if repos := got.ReposFor("acme"); len(repos) != 1 || repos[0].Name != "alpha" {
+		t.Fatalf("acme repos = %+v", repos)
+	}
+}
+
+func TestMarkOwnerFetchedUpdatesOnlyThatOwner(t *testing.T) {
+	now := time.Now().UTC()
+	var c Cache
+	c.SetOwners(now, []string{"a", "b"})
+	c.MarkOwnerFetched("a", []provider.Repo{{Owner: "a", Name: "a1"}}, now)
+	c.MarkOwnerFetched("b", []provider.Repo{{Owner: "b", Name: "b1"}}, now)
+
+	// Re-fetch a with new repos; b must be untouched.
+	c.MarkOwnerFetched("a", []provider.Repo{{Owner: "a", Name: "a2"}}, now)
+
+	if repos := c.ReposFor("a"); len(repos) != 1 || repos[0].Name != "a2" {
+		t.Fatalf("a repos = %+v", repos)
+	}
+	if repos := c.ReposFor("b"); len(repos) != 1 || repos[0].Name != "b1" {
+		t.Fatalf("b repos = %+v", repos)
+	}
+}
+
+func TestSetOwnersDropsRemovedOwnerRepos(t *testing.T) {
+	now := time.Now().UTC()
+	var c Cache
+	c.SetOwners(now, []string{"a", "b"})
+	c.MarkOwnerFetched("a", []provider.Repo{{Owner: "a", Name: "a1"}}, now)
+	c.MarkOwnerFetched("b", []provider.Repo{{Owner: "b", Name: "b1"}}, now)
+
+	// Rediscover without b: its repos and state are dropped; a's fetch preserved.
+	c.SetOwners(now, []string{"a"})
+	if len(c.Owners) != 1 || c.Owners[0].Name != "a" || c.Owners[0].FetchedAt == nil {
+		t.Fatalf("owners after rediscovery = %+v", c.Owners)
+	}
+	if len(c.ReposFor("b")) != 0 {
+		t.Fatal("b repos should be dropped")
+	}
+	if len(c.ReposFor("a")) != 1 {
+		t.Fatal("a repos should be preserved")
+	}
+}
+
+func TestLegacyFlatCacheRead(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", dir)
+	cdir := filepath.Join(dir, "skull2")
+	if err := os.MkdirAll(cdir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Legacy flat file: no owner index.
+	legacy := `{"fetched_at":"2024-01-02T03:04:05Z","repos":[
+		{"Owner":"acme","Name":"alpha"},
+		{"Owner":"acme","Name":"beta"},
+		{"Owner":"pim","Name":"dots"}
+	]}`
+	if err := os.WriteFile(filepath.Join(cdir, "legacy.json"), []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Load("legacy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Every owner present in repos is treated as fetched.
+	if len(c.Owners) != 2 {
+		t.Fatalf("synthesized owners = %+v", c.Owners)
+	}
+	if !c.OwnerFetched("acme") || !c.OwnerFetched("pim") {
+		t.Fatal("legacy owners should be treated as fetched")
+	}
+	if len(c.UnfetchedOwners()) != 0 {
+		t.Fatalf("legacy cache should have no unfetched owners: %v", c.UnfetchedOwners())
+	}
+	if len(c.ReposFor("acme")) != 2 {
+		t.Fatalf("acme repos = %+v", c.ReposFor("acme"))
+	}
+}

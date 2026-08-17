@@ -66,8 +66,20 @@ func (m *Model) bodyText() string {
 	case levelProviders:
 		return m.renderStrings(m.providerNames())
 	case levelOwners:
-		return m.renderStrings(m.ownersFor(m.selProvider))
+		owners := m.ownersFor(m.selProvider)
+		labels := make([]string, len(owners))
+		for i, o := range owners {
+			labels[i] = ownerLabel(o)
+			if !m.fetchedOwners[m.selProvider.Name][o] {
+				labels[i] += dimStyle.Render(" (not fetched)")
+			}
+		}
+		return m.renderStrings(labels)
 	default:
+		if m.fetchingOwner != "" && m.fetchingOwner == m.selOwner {
+			m.indicatorText = ""
+			return dimStyle.Render(fmt.Sprintf("fetching %s...", ownerLabel(m.selOwner)))
+		}
 		return m.renderRepos(m.visibleRepos())
 	}
 }

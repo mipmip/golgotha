@@ -14,8 +14,9 @@ func boolPtr(b bool) *bool { return &b }
 
 // fakeProvider is a hermetic Provider used in tests.
 type fakeProvider struct {
-	repos []Repo
-	err   error
+	repos  []Repo
+	owners []string
+	err    error
 }
 
 func (f *fakeProvider) ListRepos(_ context.Context, _ []string) ([]Repo, error) {
@@ -23,6 +24,13 @@ func (f *fakeProvider) ListRepos(_ context.Context, _ []string) ([]Repo, error) 
 		return nil, f.err
 	}
 	return f.repos, nil
+}
+
+func (f *fakeProvider) ListOwners(_ context.Context) ([]string, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.owners, nil
 }
 
 func TestProviderInterfaceListRepos(t *testing.T) {
@@ -268,4 +276,20 @@ func TestRegistryDuplicatePanics(t *testing.T) {
 		}
 	}()
 	reg.Register(fakeType, func(_ *config.Provider) (Provider, error) { return &fakeProvider{}, nil })
+}
+
+func TestZeroDiscoveryWarning(t *testing.T) {
+	// all_owners off: never warns.
+	if w := ZeroDiscoveryWarning(&config.Provider{Name: "p"}, nil); w != "" {
+		t.Fatalf("off should not warn, got %q", w)
+	}
+	// all_owners on, discovery present: no warning.
+	if w := ZeroDiscoveryWarning(&config.Provider{Name: "p", AllOwners: true}, []string{"org"}); w != "" {
+		t.Fatalf("non-empty discovery should not warn, got %q", w)
+	}
+	// all_owners on, zero discovery: warns and names the provider.
+	w := ZeroDiscoveryWarning(&config.Provider{Name: "gh", AllOwners: true}, nil)
+	if w == "" || !strings.Contains(w, "gh") {
+		t.Fatalf("expected warning naming provider, got %q", w)
+	}
 }

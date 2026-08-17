@@ -126,36 +126,96 @@ func selectProviders(cfg *config.Config, providerName string) ([]*config.Provide
 // refreshProviders re-fetches repositories for the selected providers and writes
 // each per-provider JSON cache. It logs per-provider results and returns the
 // first error encountered without aborting the run.
+//
+// When a provider has all_owners enabled it performs an eager discovery sweep:
+// discover owners, resolve the effective owner set (self + discovered + explicit
+// owners minus exclude_owners), and fetch repositories for every resolved owner,
+// recording per-owner fetch state in the cache. Otherwise it preserves today's
+// single ListRepos(p.Owners) behavior.
 func refreshProviders(ctx context.Context, selected []*config.Provider) error {
 	reg := provider.NewDefaultRegistry()
 	var firstErr error
+	setErr := func(err error) {
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
 	for _, p := range selected {
 		client, err := reg.Build(p)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "skull2: %s: %v\n", p.Name, err)
-			if firstErr == nil {
-				firstErr = err
+			setErr(err)
+			continue
+		}
+
+		if p.AllOwners {
+			if err := refreshAllOwners(ctx, client, p); err != nil {
+				fmt.Fprintf(os.Stderr, "skull2: %s: %v\n", p.Name, err)
+				setErr(err)
 			}
 			continue
 		}
+
 		repos, err := client.ListRepos(ctx, p.Owners)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "skull2: %s: %v\n", p.Name, err)
-			if firstErr == nil {
-				firstErr = err
-			}
+			setErr(err)
 			continue
 		}
 		if err := cache.Save(p.Name, cache.Cache{FetchedAt: time.Now().UTC(), Repos: repos}); err != nil {
 			fmt.Fprintf(os.Stderr, "skull2: %s: %v\n", p.Name, err)
-			if firstErr == nil {
-				firstErr = err
-			}
+			setErr(err)
 			continue
 		}
 		fmt.Printf("%s: %d repos\n", p.Name, len(repos))
 	}
 	return firstErr
+}
+
+// refreshAllOwners performs the eager discovery sweep for an all_owners provider:
+// it discovers owners, resolves the effective set, fetches repos for every owner
+// and writes a cache with a full owner index. Excluded owners are never fetched.
+func refreshAllOwners(ctx context.Context, client provider.Provider, p *config.Provider) error {
+	discovered, err := client.ListOwners(ctx)
+	if err != nil {
+		return fmt.Errorf("discovering owners: %w", err)
+	}
+	if w := provider.ZeroDiscoveryWarning(p, discovered); w != "" {
+		fmt.Fprintf(os.Stderr, "skull2: warning: %s\n", w)
+	}
+
+	owners := config.ResolveOwners(p, discovered)
+	now := time.Now().UTC()
+	var c cache.Cache
+	c.SetOwners(now, owners)
+
+	total := 0
+	for _, owner := range owners {
+		var reqOwners []string
+		if owner != config.SelfOwner {
+			reqOwners = []string{owner}
+		}
+		repos, err := client.ListRepos(ctx, reqOwners)
+		if err != nil {
+			return fmt.Errorf("listing repos for owner %q: %w", displayOwner(owner), err)
+		}
+		c.MarkOwnerFetched(owner, repos, time.Now().UTC())
+		total += len(repos)
+	}
+
+	if err := cache.Save(p.Name, c); err != nil {
+		return err
+	}
+	fmt.Printf("%s: %d owners, %d repos\n", p.Name, len(owners), total)
+	return nil
+}
+
+// displayOwner renders the SelfOwner sentinel for logs.
+func displayOwner(owner string) string {
+	if owner == config.SelfOwner {
+		return "(self)"
+	}
+	return owner
 }
 
 // runRefresh handles the `refresh` subcommand: re-fetch repositories from each

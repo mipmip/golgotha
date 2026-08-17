@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -61,10 +62,106 @@ type Provider struct {
 	Auth Auth `yaml:"auth"`
 	// Owners is an optional allow-list of owners/orgs; empty = all accessible.
 	Owners []string `yaml:"owners"`
+	// AllOwners, when true, discovers every organization the authenticated user
+	// belongs to (plus the user's own account) and unions them with Owners.
+	AllOwners bool `yaml:"all_owners"`
+	// ExcludeOwners lists owners to ignore (case-insensitive); may include the
+	// user's own account via SelfOwner's configured name.
+	ExcludeOwners []string `yaml:"exclude_owners"`
 	// IncludeArchived controls whether archived repos are listed; default false.
 	IncludeArchived *bool `yaml:"include_archived"`
 	// IncludeForks controls whether fork repos are listed; default true.
 	IncludeForks *bool `yaml:"include_forks"`
+}
+
+// SelfOwner is the sentinel owner value meaning "the authenticated user's own
+// account/repositories". Provider clients treat an empty owner in the slice
+// passed to ListRepos as "fetch the user's own repos" (matching today's
+// empty-owners behavior). It is exported so callers (sync, TUI) can pass it
+// through ResolveOwners's output straight to ListRepos.
+const SelfOwner = ""
+
+// selfExcludeToken is the case-insensitive name a user writes in exclude_owners
+// to exclude their own account (which is otherwise the empty-string SelfOwner).
+const selfExcludeToken = "self"
+
+// ResolveOwners computes the effective owner set for a provider given the
+// organizations discovered from the provider (may be nil). It is pure.
+//
+// When AllOwners is false it reproduces today's behavior exactly: the explicit
+// Owners list is returned as-is (an empty list means the authenticated user's
+// own repos), with exclude_owners still honored.
+//
+// When AllOwners is true the result is the union of:
+//   - SelfOwner (the user's own account),
+//   - every discovered organization,
+//   - every explicit Owners entry,
+//
+// minus ExcludeOwners. Matching for exclusion and de-duplication is
+// case-insensitive; the user's own account is excluded when exclude_owners
+// contains the token "self" (any case). The result is de-duplicated and stably
+// sorted, with SelfOwner (the empty string) sorting first when present.
+func ResolveOwners(p *Provider, discovered []string) []string {
+	excluded := make(map[string]struct{}, len(p.ExcludeOwners))
+	excludeSelf := false
+	for _, e := range p.ExcludeOwners {
+		e = strings.TrimSpace(e)
+		if e == "" {
+			continue
+		}
+		if strings.EqualFold(e, selfExcludeToken) {
+			excludeSelf = true
+			continue
+		}
+		excluded[strings.ToLower(e)] = struct{}{}
+	}
+
+	if !p.AllOwners {
+		// Legacy behavior: explicit owners only (empty = own repos). Still apply
+		// exclude_owners so it composes.
+		out := make([]string, 0, len(p.Owners))
+		seen := make(map[string]struct{}, len(p.Owners))
+		for _, o := range p.Owners {
+			if _, drop := excluded[strings.ToLower(o)]; drop {
+				continue
+			}
+			key := strings.ToLower(o)
+			if _, dup := seen[key]; dup {
+				continue
+			}
+			seen[key] = struct{}{}
+			out = append(out, o)
+		}
+		return out
+	}
+
+	// AllOwners: union of self, discovered and explicit owners minus excludes.
+	out := make([]string, 0, len(discovered)+len(p.Owners)+1)
+	seen := make(map[string]struct{})
+
+	includeSelf := !excludeSelf
+	for _, group := range [][]string{discovered, p.Owners} {
+		for _, o := range group {
+			if o == SelfOwner {
+				continue // guard: never treat a stray empty entry as a named owner
+			}
+			if _, drop := excluded[strings.ToLower(o)]; drop {
+				continue
+			}
+			key := strings.ToLower(o)
+			if _, dup := seen[key]; dup {
+				continue
+			}
+			seen[key] = struct{}{}
+			out = append(out, o)
+		}
+	}
+
+	sort.Strings(out)
+	if includeSelf {
+		out = append([]string{SelfOwner}, out...)
+	}
+	return out
 }
 
 // Auth describes credential resolution for a provider.

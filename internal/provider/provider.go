@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/mipmip/skull2/internal/config"
@@ -37,6 +38,26 @@ type Provider interface {
 	// ListRepos returns the repositories for the given owners. An empty owners
 	// slice means all accessible repositories.
 	ListRepos(ctx context.Context, owners []string) ([]Repo, error)
+	// ListOwners discovers the organizations/groups the authenticated user
+	// belongs to, mapped to the same owner strings ListRepos accepts. It does
+	// NOT include the user's own account (that is the SelfOwner sentinel added
+	// by config.ResolveOwners).
+	ListOwners(ctx context.Context) ([]string, error)
+}
+
+// ZeroDiscoveryWarning returns a human-readable warning when all_owners is
+// enabled but discovery returned no organizations, likely a missing token scope
+// (e.g. GitHub read:org). It returns "" when a warning is not warranted so
+// callers can `if w := ...; w != "" { log }`.
+func ZeroDiscoveryWarning(p *config.Provider, discovered []string) string {
+	if !p.AllOwners || len(discovered) > 0 {
+		return ""
+	}
+	return fmt.Sprintf(
+		"provider %q: all_owners is enabled but discovery found no organizations; "+
+			"the token may be missing an org-read scope (e.g. GitHub read:org)",
+		p.Name,
+	)
 }
 
 // FilterRepos drops archived and/or fork repositories according to the

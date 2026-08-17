@@ -173,3 +173,49 @@ func TestCodebergDefaultBase(t *testing.T) {
 		t.Fatalf("default base = %q", cb.base)
 	}
 }
+
+func TestCodebergListOwners(t *testing.T) {
+	t.Setenv("SKULL2_CODEBERG_TOKEN", "cb-tok")
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/user/orgs", func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Query().Get("page") {
+		case "1":
+			w.Header().Set("X-Total-Count", strconv.Itoa(codebergPageLimit+1))
+			s := "["
+			for i := 0; i < codebergPageLimit; i++ {
+				if i > 0 {
+					s += ","
+				}
+				s += fmt.Sprintf(`{"username":"org%d"}`, i)
+			}
+			fmt.Fprint(w, s+"]")
+		case "2":
+			fmt.Fprint(w, `[{"username":"last-org"}]`)
+		default:
+			t.Errorf("unexpected page %q", r.URL.Query().Get("page"))
+		}
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	cfg := config.Provider{Name: "codeberg", Type: config.ProviderCodeberg, Short: "cb", APIURL: srv.URL, Auth: config.Auth{Env: "SKULL2_CODEBERG_TOKEN"}}
+	owners, err := NewCodeberg(cfg, srv.Client()).ListOwners(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(owners) != codebergPageLimit+1 || owners[0] != "org0" || owners[len(owners)-1] != "last-org" {
+		t.Fatalf("owners len=%d last=%q", len(owners), owners[len(owners)-1])
+	}
+}
+
+func TestCodebergListOwnersError(t *testing.T) {
+	t.Setenv("SKULL2_CODEBERG_TOKEN", "cb-tok")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	cfg := config.Provider{Name: "codeberg", Type: config.ProviderCodeberg, Short: "cb", APIURL: srv.URL, Auth: config.Auth{Env: "SKULL2_CODEBERG_TOKEN"}}
+	if _, err := NewCodeberg(cfg, srv.Client()).ListOwners(context.Background()); err == nil {
+		t.Fatal("expected error")
+	}
+}

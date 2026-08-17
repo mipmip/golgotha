@@ -195,3 +195,58 @@ func TestNextLink(t *testing.T) {
 		}
 	}
 }
+
+func TestGitHubListOwnersPagination(t *testing.T) {
+	t.Setenv("SKULL2_GITHUB_TOKEN", "tok")
+	mux := http.NewServeMux()
+	mux.HandleFunc("/user/orgs", func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Query().Get("page") {
+		case "", "1":
+			w.Header().Set("Link", fmt.Sprintf(`<%s/user/orgs?per_page=100&page=2>; rel="next"`, "http://"+r.Host))
+			fmt.Fprint(w, `[{"login":"acme"},{"login":"beta"}]`)
+		case "2":
+			fmt.Fprint(w, `[{"login":"gamma"}]`)
+		default:
+			t.Errorf("unexpected page %q", r.URL.Query().Get("page"))
+		}
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	cfg := config.Provider{
+		Name: "github", Type: config.ProviderGitHub, Short: "gh", APIURL: srv.URL,
+		Auth: config.Auth{Env: "SKULL2_GITHUB_TOKEN"},
+	}
+	gh := NewGitHub(cfg, srv.Client())
+	owners, err := gh.ListOwners(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(owners) != 3 || owners[0] != "acme" || owners[1] != "beta" || owners[2] != "gamma" {
+		t.Fatalf("owners = %v, want [acme beta gamma]", owners)
+	}
+}
+
+func TestGitHubListOwnersEmptyAndError(t *testing.T) {
+	t.Setenv("SKULL2_GITHUB_TOKEN", "tok")
+	// Empty discovery.
+	empty := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `[]`)
+	}))
+	defer empty.Close()
+	cfg := config.Provider{Name: "github", Type: config.ProviderGitHub, Short: "gh", APIURL: empty.URL, Auth: config.Auth{Env: "SKULL2_GITHUB_TOKEN"}}
+	owners, err := NewGitHub(cfg, empty.Client()).ListOwners(context.Background())
+	if err != nil || len(owners) != 0 {
+		t.Fatalf("empty discovery: owners=%v err=%v", owners, err)
+	}
+
+	// HTTP error.
+	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "nope", http.StatusForbidden)
+	}))
+	defer bad.Close()
+	cfg.APIURL = bad.URL
+	if _, err := NewGitHub(cfg, bad.Client()).ListOwners(context.Background()); err == nil {
+		t.Fatal("expected error from forbidden orgs")
+	}
+}

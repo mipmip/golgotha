@@ -104,6 +104,60 @@ func (g *GitLab) ListRepos(ctx context.Context, owners []string) ([]Repo, error)
 	return FilterRepos(&g.cfg, all), nil
 }
 
+// ListOwners discovers the groups the authenticated user is a member of via
+// /groups?min_access_level=10 (Guest and above), paginating via X-Next-Page. It
+// returns each group's full_path so it maps to the owner strings ListRepos uses
+// (which fetches /groups/<owner>/projects?include_subgroups=true).
+func (g *GitLab) ListOwners(ctx context.Context) ([]string, error) {
+	token, err := ResolveToken(&g.cfg, g.getter, g.env)
+	if err != nil {
+		return nil, err
+	}
+
+	type glGroup struct {
+		FullPath string `json:"full_path"`
+		Path     string `json:"path"`
+	}
+	base := fmt.Sprintf("%s/groups?min_access_level=10&all_available=false&per_page=%d", g.base, gitlabPageLimit)
+
+	var out []string
+	page := "1"
+	for page != "" {
+		u := base + "&page=" + url.QueryEscape(page)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("PRIVATE-TOKEN", token)
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := g.client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+		body, err := readAllAndClose(resp)
+		if err != nil {
+			return nil, err
+		}
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("gitlab: /groups: %s: %s", resp.Status, strings.TrimSpace(string(body)))
+		}
+		var groups []glGroup
+		if err := json.Unmarshal(body, &groups); err != nil {
+			return nil, fmt.Errorf("gitlab: decoding groups: %w", err)
+		}
+		for _, gr := range groups {
+			name := gr.FullPath
+			if name == "" {
+				name = gr.Path
+			}
+			out = append(out, name)
+		}
+		page = resp.Header.Get("X-Next-Page")
+	}
+	return out, nil
+}
+
 // listPath fetches every page for a v4 endpoint path (with an existing query),
 // paginating via the X-Next-Page header.
 func (g *GitLab) listPath(ctx context.Context, token, path string) ([]Repo, error) {

@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/mipmip/skull2/internal/config"
 )
 
 // Update implements tea.Model. It is pure with respect to side effects: all
@@ -53,10 +55,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = fmt.Sprintf("refresh failed %s: %v", msg.Provider, msg.Err)
 			return m, nil
 		}
-		// Reload the refreshed provider's cache into the model.
+		// Reload the refreshed provider's cache into the model (repos + owner
+		// index + fetched state).
 		for _, p := range m.providers {
 			if p.Name == msg.Provider {
-				m.reposByProvider[p.Name] = m.loadProvider(p)
+				m.loadProviderInto(p)
 				break
 			}
 		}
@@ -64,6 +67,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.offset = 0
 		m.clampCursor()
 		m.status = fmt.Sprintf("refreshed %s: %d repos", msg.Provider, msg.Count)
+		return m, nil
+
+	case ownerFetchedMsg:
+		if m.fetchingOwner == msg.Owner {
+			m.fetchingOwner = ""
+		}
+		if msg.Err != nil {
+			m.status = fmt.Sprintf("fetch failed %s/%s: %v", msg.Provider, ownerLabel(msg.Owner), msg.Err)
+			return m, nil
+		}
+		// Populate the model in-memory from the message so the result is applied
+		// whether or not the caller persisted a cache (the production fetcher does;
+		// tests inject the message). The owner is marked fetched and its repos
+		// replace any previously-cached repos for that owner.
+		m.applyOwnerRepos(msg.Provider, msg.Owner, msg.Repos)
+		m.clampCursor()
+		m.status = fmt.Sprintf("fetched %s: %d repos", ownerLabel(msg.Owner), len(msg.Repos))
 		return m, nil
 	}
 
@@ -212,6 +232,7 @@ func (m *Model) enter() (tea.Model, tea.Cmd) {
 			m.cursor = 0
 			m.offset = 0
 			m.clampCursor()
+			return m, m.maybeFetchOwner(m.selProvider, m.selOwner)
 		}
 	case levelRepos:
 		return m.clone()
@@ -267,9 +288,44 @@ func (m *Model) open() (tea.Model, tea.Cmd) {
 	return m, openCmd(it.Repo.WebURL)
 }
 
-// refresh re-fetches the current provider's cache. It is a no-op when refresh is
-// disabled (tests) or no provider is selected.
+// maybeFetchOwner returns a lazy-fetch command when the owner's repos are not
+// yet cached, or nil when they are (instant display) or fetching is disabled.
+func (m *Model) maybeFetchOwner(p *config.Provider, owner string) tea.Cmd {
+	if p == nil || m.ownerFetcher == nil {
+		return nil
+	}
+	if m.fetchedOwners[p.Name][owner] {
+		return nil // already fetched: instant.
+	}
+	m.fetchingOwner = owner
+	m.status = fmt.Sprintf("fetching %s...", ownerLabel(owner))
+	return m.ownerFetcher(context.Background(), p, owner)
+}
+
+// forceFetchOwner returns a lazy-fetch command for the owner regardless of its
+// cached state (used by `r` to re-fetch the current owner).
+func (m *Model) forceFetchOwner(p *config.Provider, owner string) tea.Cmd {
+	if p == nil || m.ownerFetcher == nil {
+		return nil
+	}
+	m.fetchingOwner = owner
+	m.status = fmt.Sprintf("re-fetching %s...", ownerLabel(owner))
+	return m.ownerFetcher(context.Background(), p, owner)
+}
+
+// refresh re-fetches the current scope. When viewing an owner's repos it
+// re-fetches just that owner (lazy model); otherwise it refreshes the selected
+// or highlighted provider. It is a no-op when the relevant seam is disabled
+// (tests) or nothing is selected.
 func (m *Model) refresh() (tea.Model, tea.Cmd) {
+	// At the repos level, `r` re-fetches the current owner.
+	if m.nav == levelRepos && m.selProvider != nil && m.filter.Value() == "" {
+		if cmd := m.forceFetchOwner(m.selProvider, m.selOwner); cmd != nil {
+			return m, cmd
+		}
+		return m, nil
+	}
+
 	p := m.selProvider
 	if p == nil {
 		// At the top level, refresh the highlighted provider.

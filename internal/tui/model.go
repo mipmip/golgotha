@@ -68,6 +68,14 @@ type Model struct {
 	providers []*config.Provider
 	// reposByProvider holds cache-loaded repo items keyed by provider name.
 	reposByProvider map[string][]repoItem
+	// ownersByProvider holds the cached owner index (incl. discovered-but-
+	// unfetched owners) keyed by provider name. Empty for a legacy/eager cache
+	// with no owner index, in which case ownersFor falls back to repo-derived
+	// owners.
+	ownersByProvider map[string][]string
+	// fetchedOwners tracks, per provider, which owners have had their repos
+	// fetched (so the TUI knows whether entering an owner needs a lazy fetch).
+	fetchedOwners map[string]map[string]bool
 
 	// nav is the current navigation level.
 	nav level
@@ -95,6 +103,12 @@ type Model struct {
 	cloner Cloner
 	// refresher re-fetches a provider's cache; nil disables refresh (tests).
 	refresher func(ctx context.Context, p *config.Provider) tea.Cmd
+	// ownerFetcher lazily fetches one owner's repos and caches them; nil disables
+	// lazy fetch (tests inject a fake or the ownerFetchedMsg directly).
+	ownerFetcher func(ctx context.Context, p *config.Provider, owner string) tea.Cmd
+	// fetchingOwner is the owner currently being lazily fetched (for the loading
+	// line), or "" when none.
+	fetchingOwner string
 
 	// checkCloned reports whether target already exists as a git repo. A var so
 	// tests can stub the filesystem check.
@@ -111,10 +125,12 @@ type Model struct {
 // It resolves each repo's clone target and cloned state up front.
 func New(cfg *config.Config) *Model {
 	m := &Model{
-		cfg:             cfg,
-		reposByProvider: map[string][]repoItem{},
-		nav:             levelProviders,
-		checkCloned:     isGitRepo,
+		cfg:              cfg,
+		reposByProvider:  map[string][]repoItem{},
+		ownersByProvider: map[string][]string{},
+		fetchedOwners:    map[string]map[string]bool{},
+		nav:              levelProviders,
+		checkCloned:      isGitRepo,
 	}
 	for i := range cfg.Providers {
 		m.providers = append(m.providers, &cfg.Providers[i])
@@ -126,6 +142,7 @@ func New(cfg *config.Config) *Model {
 
 	m.cloner = newEngineCloner(cfg)
 	m.refresher = defaultRefresher(cfg, m)
+	m.ownerFetcher = defaultOwnerFetcher(cfg)
 
 	m.loadCaches()
 	return m
@@ -134,8 +151,33 @@ func New(cfg *config.Config) *Model {
 // loadCaches (re)loads all provider caches into reposByProvider.
 func (m *Model) loadCaches() {
 	for _, p := range m.providers {
-		m.reposByProvider[p.Name] = m.loadProvider(p)
+		m.loadProviderInto(p)
 	}
+}
+
+// loadProviderInto loads one provider's cache into the repo items, owner index
+// and fetched-owner state.
+func (m *Model) loadProviderInto(p *config.Provider) {
+	if m.ownersByProvider == nil {
+		m.ownersByProvider = map[string][]string{}
+	}
+	if m.fetchedOwners == nil {
+		m.fetchedOwners = map[string]map[string]bool{}
+	}
+	m.reposByProvider[p.Name] = m.loadProvider(p)
+
+	c, _, err := cache.LoadOrEmpty(p.Name)
+	if err != nil {
+		m.ownersByProvider[p.Name] = nil
+		m.fetchedOwners[p.Name] = map[string]bool{}
+		return
+	}
+	m.ownersByProvider[p.Name] = c.OwnerNames()
+	fetched := map[string]bool{}
+	for _, name := range c.OwnerNames() {
+		fetched[name] = c.OwnerFetched(name)
+	}
+	m.fetchedOwners[p.Name] = fetched
 }
 
 // loadProvider loads one provider's cache into repoItems with resolved state.
@@ -159,6 +201,65 @@ func (m *Model) loadProvider(p *config.Provider) []repoItem {
 	return items
 }
 
+// applyOwnerRepos replaces a provider owner's repo items with freshly fetched
+// repos (resolving clone targets/state), marks the owner fetched and ensures it
+// is in the owner index. It updates only that owner's rows.
+func (m *Model) applyOwnerRepos(providerName, owner string, repos []provider.Repo) {
+	var p *config.Provider
+	for _, cand := range m.providers {
+		if cand.Name == providerName {
+			p = cand
+			break
+		}
+	}
+	if p == nil {
+		return
+	}
+
+	// Rebuild the provider's items: keep other owners, replace this owner's.
+	filtered := provider.FilterRepos(p, repos)
+	kept := make([]repoItem, 0, len(m.reposByProvider[providerName])+len(filtered))
+	for _, it := range m.reposByProvider[providerName] {
+		if it.Repo.Owner != owner {
+			kept = append(kept, it)
+		}
+	}
+	for _, r := range filtered {
+		it := repoItem{Repo: r, Provider: p}
+		if target, terr := resolveTarget(m.cfg, p, r); terr == nil {
+			it.Target = target
+			if m.checkCloned != nil {
+				it.Cloned = m.checkCloned(target)
+			}
+		}
+		kept = append(kept, it)
+	}
+	m.reposByProvider[providerName] = kept
+
+	if m.ownersByProvider == nil {
+		m.ownersByProvider = map[string][]string{}
+	}
+	if m.fetchedOwners == nil {
+		m.fetchedOwners = map[string]map[string]bool{}
+	}
+	if m.fetchedOwners[providerName] == nil {
+		m.fetchedOwners[providerName] = map[string]bool{}
+	}
+	m.fetchedOwners[providerName][owner] = true
+
+	// Ensure the owner is in the index.
+	found := false
+	for _, o := range m.ownersByProvider[providerName] {
+		if o == owner {
+			found = true
+			break
+		}
+	}
+	if !found {
+		m.ownersByProvider[providerName] = append(m.ownersByProvider[providerName], owner)
+	}
+}
+
 // Init implements tea.Model.
 func (m *Model) Init() tea.Cmd { return nil }
 
@@ -171,8 +272,37 @@ func (m *Model) providerNames() []string {
 	return names
 }
 
-// ownersFor returns the sorted, de-duplicated owner names for a provider.
+// selfOwnerLabel is the display label for the SelfOwner sentinel ("") in the
+// owner list.
+const selfOwnerLabel = "(your account)"
+
+// ownerLabel renders an owner name for display, mapping the SelfOwner sentinel.
+func ownerLabel(owner string) string {
+	if owner == config.SelfOwner {
+		return selfOwnerLabel
+	}
+	return owner
+}
+
+// ownersFor returns the owner names for a provider. It uses the cached owner
+// index (including discovered-but-unfetched owners) when present, and falls back
+// to distinct repo-derived owners for a legacy/eager cache without an index.
 func (m *Model) ownersFor(p *config.Provider) []string {
+	if idx := m.ownersByProvider[p.Name]; len(idx) > 0 {
+		// Preserve the index order but keep it stable and de-duplicated.
+		seen := map[string]struct{}{}
+		owners := make([]string, 0, len(idx))
+		for _, o := range idx {
+			if _, ok := seen[o]; ok {
+				continue
+			}
+			seen[o] = struct{}{}
+			owners = append(owners, o)
+		}
+		sort.Strings(owners)
+		return owners
+	}
+
 	seen := map[string]struct{}{}
 	var owners []string
 	for _, it := range m.reposByProvider[p.Name] {

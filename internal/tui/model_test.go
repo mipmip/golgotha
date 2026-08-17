@@ -337,3 +337,119 @@ func TestWindowSizeMsg(t *testing.T) {
 		t.Fatalf("expected size stored, got %dx%d", m.width, m.height)
 	}
 }
+
+// fakeFetcher records lazy owner-fetch calls and returns a canned message.
+type fakeFetcher struct {
+	calls []string
+	repos []provider.Repo
+	err   error
+}
+
+func (f *fakeFetcher) cmd(_ context.Context, p *config.Provider, owner string) tea.Cmd {
+	f.calls = append(f.calls, p.Name+":"+owner)
+	repos := f.repos
+	err := f.err
+	return func() tea.Msg {
+		return ownerFetchedMsg{Provider: p.Name, Owner: owner, Repos: repos, Err: err}
+	}
+}
+
+// newLazyModel builds a Model with a single provider whose owner index has one
+// fetched owner (acme) and one unfetched owner (beta), plus an injectable fake
+// fetcher.
+func newLazyModel(t *testing.T) (*Model, *fakeFetcher) {
+	t.Helper()
+	p := &config.Provider{Name: "github", Type: config.ProviderGitHub, Short: "gh", WebURL: "https://github.com"}
+	ff := &fakeFetcher{repos: []provider.Repo{{Owner: "beta", Name: "b1", WebURL: "https://github.com/beta/b1"}}}
+	ti := textinput.New()
+	m := &Model{
+		cfg:              &config.Config{BaseDir: "/tmp", ClonePatternTpl: "{{.BaseDir}}/{{.Owner}}/{{.Repo}}", Providers: []config.Provider{*p}},
+		providers:        []*config.Provider{p},
+		reposByProvider:  map[string][]repoItem{},
+		ownersByProvider: map[string][]string{"github": {"acme", "beta"}},
+		fetchedOwners:    map[string]map[string]bool{"github": {"acme": true, "beta": false}},
+		nav:              levelProviders,
+		filter:           ti,
+		cloner:           &fakeCloner{},
+		refresher:        nil,
+		ownerFetcher:     ff.cmd,
+		checkCloned:      func(string) bool { return false },
+	}
+	m.reposByProvider["github"] = []repoItem{
+		{Repo: provider.Repo{Owner: "acme", Name: "widgets", WebURL: "https://github.com/acme/widgets"}, Provider: p, Target: "/tmp/a"},
+	}
+	return m, ff
+}
+
+func TestOwnerLevelListsDiscoveredUnfetched(t *testing.T) {
+	m, _ := newLazyModel(t)
+	send(m, key("enter")) // into owners
+	owners := m.ownersFor(m.selProvider)
+	if len(owners) != 2 || owners[0] != "acme" || owners[1] != "beta" {
+		t.Fatalf("owner index not listed incl. unfetched: %v", owners)
+	}
+}
+
+func TestEnterUnfetchedOwnerEmitsFetchAndPopulates(t *testing.T) {
+	m, ff := newLazyModel(t)
+	send(m, key("enter")) // into owners (cursor on acme)
+	send(m, key("j"))     // move to beta
+	cmd := send(m, key("enter"))
+	if cmd == nil {
+		t.Fatal("expected a fetch command for unfetched owner")
+	}
+	if m.selOwner != "beta" {
+		t.Fatalf("selOwner = %q, want beta", m.selOwner)
+	}
+	if m.fetchingOwner != "beta" {
+		t.Fatalf("fetchingOwner = %q, want beta", m.fetchingOwner)
+	}
+	if len(ff.calls) != 1 || ff.calls[0] != "github:beta" {
+		t.Fatalf("fetch calls = %v", ff.calls)
+	}
+	// Run the command and feed the message back.
+	msg := cmd()
+	if _, ok := msg.(ownerFetchedMsg); !ok {
+		t.Fatalf("expected ownerFetchedMsg, got %T", msg)
+	}
+	send(m, msg)
+	if m.fetchingOwner != "" {
+		t.Fatal("fetchingOwner should be cleared after result")
+	}
+	// beta now cached and populated.
+	if !m.fetchedOwners["github"]["beta"] {
+		t.Fatal("beta should be marked fetched after result")
+	}
+}
+
+func TestEnterFetchedOwnerDoesNotFetch(t *testing.T) {
+	m, ff := newLazyModel(t)
+	send(m, key("enter")) // into owners (cursor on acme, which is fetched)
+	cmd := send(m, key("enter"))
+	if cmd != nil {
+		t.Fatal("expected no fetch command for already-fetched owner")
+	}
+	if len(ff.calls) != 0 {
+		t.Fatalf("expected no fetch calls, got %v", ff.calls)
+	}
+	if m.selOwner != "acme" {
+		t.Fatalf("selOwner = %q, want acme", m.selOwner)
+	}
+}
+
+func TestRefreshReFetchesCurrentOwner(t *testing.T) {
+	m, ff := newLazyModel(t)
+	send(m, key("enter")) // owners
+	send(m, key("enter")) // into acme (fetched, no fetch)
+	if m.nav != levelRepos || m.selOwner != "acme" {
+		t.Fatalf("expected repos of acme, got nav=%d owner=%q", m.nav, m.selOwner)
+	}
+	// `r` re-fetches acme even though it is already fetched.
+	cmd := send(m, key("r"))
+	if cmd == nil {
+		t.Fatal("expected re-fetch command from r at repos level")
+	}
+	if len(ff.calls) != 1 || ff.calls[0] != "github:acme" {
+		t.Fatalf("re-fetch calls = %v", ff.calls)
+	}
+}

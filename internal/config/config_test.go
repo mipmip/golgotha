@@ -325,3 +325,85 @@ func TestValidConfigContents(t *testing.T) {
 		t.Errorf("owners = %v, want 2", cfg.Providers[0].Owners)
 	}
 }
+
+func TestResolveOwnersDefaultOff(t *testing.T) {
+	// AllOwners false: explicit owners returned as-is (empty means own repos).
+	p := &Provider{Owners: []string{"acme", "beta"}}
+	got := ResolveOwners(p, []string{"discovered-org"})
+	if len(got) != 2 || got[0] != "acme" || got[1] != "beta" {
+		t.Fatalf("default-off owners = %v, want [acme beta] (discovery ignored)", got)
+	}
+
+	// Empty explicit owners means own repos: a single-element {SelfOwner} set is
+	// not synthesized off; the empty list is preserved (clients treat it as own).
+	empty := &Provider{}
+	if got := ResolveOwners(empty, []string{"x"}); len(got) != 0 {
+		t.Fatalf("default-off empty owners = %v, want empty", got)
+	}
+}
+
+func TestResolveOwnersDefaultOffHonorsExclude(t *testing.T) {
+	p := &Provider{Owners: []string{"acme", "beta"}, ExcludeOwners: []string{"BETA"}}
+	got := ResolveOwners(p, nil)
+	if len(got) != 1 || got[0] != "acme" {
+		t.Fatalf("default-off exclude = %v, want [acme]", got)
+	}
+}
+
+func TestResolveOwnersUnion(t *testing.T) {
+	p := &Provider{
+		AllOwners: true,
+		Owners:    []string{"extra"},
+	}
+	got := ResolveOwners(p, []string{"orgb", "orga"})
+	// Self first (empty), then sorted orgs and explicit owners.
+	want := []string{SelfOwner, "extra", "orga", "orgb"}
+	if len(got) != len(want) {
+		t.Fatalf("union = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("union = %v, want %v", got, want)
+		}
+	}
+}
+
+func TestResolveOwnersUnionDedupCaseInsensitive(t *testing.T) {
+	p := &Provider{
+		AllOwners: true,
+		Owners:    []string{"Acme", "acme"},
+	}
+	got := ResolveOwners(p, []string{"ACME", "beta"})
+	// SelfOwner + acme (first-seen casing) + beta.
+	want := []string{SelfOwner, "ACME", "beta"}
+	if len(got) != len(want) {
+		t.Fatalf("dedup = %v, want %v", got, want)
+	}
+	// The self sentinel sorts first; the two named owners are sorted, first-wins
+	// on casing: discovered "ACME" is seen before explicit "Acme".
+	if got[0] != SelfOwner || got[1] != "ACME" || got[2] != "beta" {
+		t.Fatalf("dedup = %v, want %v", got, want)
+	}
+}
+
+func TestResolveOwnersExcludeIncludingSelf(t *testing.T) {
+	p := &Provider{
+		AllOwners:     true,
+		Owners:        []string{"keep"},
+		ExcludeOwners: []string{"Noisy", "self"},
+	}
+	got := ResolveOwners(p, []string{"noisy", "keep", "other"})
+	// self excluded via "self" token; "noisy" excluded case-insensitively.
+	want := []string{"keep", "other"}
+	if len(got) != len(want) {
+		t.Fatalf("exclude = %v, want %v", got, want)
+	}
+	for _, o := range got {
+		if o == SelfOwner {
+			t.Fatalf("self should have been excluded: %v", got)
+		}
+	}
+	if got[0] != "keep" || got[1] != "other" {
+		t.Fatalf("exclude = %v, want %v", got, want)
+	}
+}

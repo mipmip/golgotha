@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/mipmip/skull2/internal/cache"
+	"github.com/mipmip/skull2/internal/config"
 	"github.com/mipmip/skull2/internal/provider"
 )
 
@@ -140,5 +142,112 @@ func TestRunSyncNoCacheNoFailure(t *testing.T) {
 func TestRunReturnsUnknownCommand(t *testing.T) {
 	if err := run([]string{"bogus"}); err == nil {
 		t.Fatalf("expected unknown command error")
+	}
+}
+
+// fakeDiscoverClient is a hermetic provider.Provider for eager-sweep tests. It
+// records which owner sets ListRepos was called with and returns one repo per
+// non-self owner.
+type fakeDiscoverClient struct {
+	owners     []string
+	listCalls  [][]string
+	reposByReq map[string][]provider.Repo
+}
+
+func (f *fakeDiscoverClient) ListOwners(_ context.Context) ([]string, error) {
+	return f.owners, nil
+}
+
+func (f *fakeDiscoverClient) ListRepos(_ context.Context, owners []string) ([]provider.Repo, error) {
+	f.listCalls = append(f.listCalls, owners)
+	if len(owners) == 0 {
+		// Self.
+		return []provider.Repo{{Owner: "me", Name: "personal"}}, nil
+	}
+	owner := owners[0]
+	return []provider.Repo{{Owner: owner, Name: owner + "-repo"}}, nil
+}
+
+func TestRefreshAllOwnersEagerSweep(t *testing.T) {
+	cacheHome := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", cacheHome)
+
+	p := &config.Provider{
+		Name:      "gh",
+		Type:      config.ProviderGitHub,
+		Short:     "gh",
+		AllOwners: true,
+		Owners:    []string{"explicit"},
+	}
+	client := &fakeDiscoverClient{owners: []string{"acme", "beta"}}
+
+	if err := refreshAllOwners(context.Background(), client, p); err != nil {
+		t.Fatal(err)
+	}
+
+	c, err := cache.Load("gh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Resolved: self, acme, beta, explicit -> all fetched, all in the index.
+	names := map[string]bool{}
+	for _, o := range c.Owners {
+		names[o.Name] = true
+		if o.FetchedAt == nil {
+			t.Fatalf("owner %q should be fetched after eager sweep", o.Name)
+		}
+	}
+	for _, want := range []string{config.SelfOwner, "acme", "beta", "explicit"} {
+		if !names[want] {
+			t.Fatalf("owner %q missing from index %+v", want, c.Owners)
+		}
+	}
+	// Self was fetched with an empty owner slice.
+	sawSelf := false
+	for _, call := range client.listCalls {
+		if len(call) == 0 {
+			sawSelf = true
+		}
+	}
+	if !sawSelf {
+		t.Fatalf("expected a ListRepos call with empty owners for self, calls=%v", client.listCalls)
+	}
+}
+
+func TestRefreshAllOwnersSkipsExcluded(t *testing.T) {
+	cacheHome := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", cacheHome)
+
+	p := &config.Provider{
+		Name:          "gh",
+		Type:          config.ProviderGitHub,
+		Short:         "gh",
+		AllOwners:     true,
+		ExcludeOwners: []string{"noisy", "self"},
+	}
+	client := &fakeDiscoverClient{owners: []string{"acme", "noisy"}}
+
+	if err := refreshAllOwners(context.Background(), client, p); err != nil {
+		t.Fatal(err)
+	}
+	c, err := cache.Load("gh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// noisy excluded; self excluded via token; only acme remains.
+	if len(c.Owners) != 1 || c.Owners[0].Name != "acme" {
+		t.Fatalf("owners = %+v, want only acme", c.Owners)
+	}
+	// The excluded owner was never fetched/cloned: no repos for it.
+	if len(c.ReposFor("noisy")) != 0 {
+		t.Fatal("excluded owner should not be fetched")
+	}
+	for _, call := range client.listCalls {
+		if len(call) == 1 && call[0] == "noisy" {
+			t.Fatal("ListRepos should not be called for excluded owner")
+		}
+		if len(call) == 0 {
+			t.Fatal("self was excluded; ListRepos should not be called for self")
+		}
 	}
 }

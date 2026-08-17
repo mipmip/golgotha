@@ -189,3 +189,51 @@ func TestNewDefaultRegistryBuildsAllTypes(t *testing.T) {
 		}
 	}
 }
+
+func TestGitLabListOwnersPagination(t *testing.T) {
+	t.Setenv("SKULL2_GITLAB_TOKEN", "gl-tok")
+	mux := http.NewServeMux()
+	mux.HandleFunc("/groups", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("min_access_level") != "10" {
+			t.Errorf("min_access_level = %q", r.URL.Query().Get("min_access_level"))
+		}
+		switch r.URL.Query().Get("page") {
+		case "1":
+			w.Header().Set("X-Next-Page", "2")
+			fmt.Fprint(w, `[{"full_path":"acme"},{"full_path":"acme/sub"}]`)
+		case "2":
+			fmt.Fprint(w, `[{"path":"fallback","full_path":""}]`)
+		default:
+			t.Errorf("unexpected page %q", r.URL.Query().Get("page"))
+		}
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	cfg := config.Provider{Name: "gitlab", Type: config.ProviderGitLab, Short: "gl", APIURL: srv.URL, Auth: config.Auth{Env: "SKULL2_GITLAB_TOKEN"}}
+	owners, err := NewGitLab(cfg, srv.Client()).ListOwners(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"acme", "acme/sub", "fallback"}
+	if len(owners) != len(want) {
+		t.Fatalf("owners = %v, want %v", owners, want)
+	}
+	for i := range want {
+		if owners[i] != want[i] {
+			t.Fatalf("owners = %v, want %v", owners, want)
+		}
+	}
+}
+
+func TestGitLabListOwnersError(t *testing.T) {
+	t.Setenv("SKULL2_GITLAB_TOKEN", "gl-tok")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+	cfg := config.Provider{Name: "gitlab", Type: config.ProviderGitLab, Short: "gl", APIURL: srv.URL, Auth: config.Auth{Env: "SKULL2_GITLAB_TOKEN"}}
+	if _, err := NewGitLab(cfg, srv.Client()).ListOwners(context.Background()); err == nil {
+		t.Fatal("expected error")
+	}
+}
