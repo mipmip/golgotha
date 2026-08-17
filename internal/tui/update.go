@@ -60,6 +60,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				break
 			}
 		}
+		m.cursor = 0
+		m.offset = 0
 		m.clampCursor()
 		m.status = fmt.Sprintf("refreshed %s: %d repos", msg.Provider, msg.Count)
 		return m, nil
@@ -92,6 +94,7 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.filter, cmd = m.filter.Update(msg)
 		m.cursor = 0
+		m.offset = 0
 		return m, cmd
 	}
 
@@ -101,12 +104,36 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case "up", "k":
-		m.cursor--
-		m.clampCursor()
+		m.moveCursor(-1)
 		return m, nil
 
 	case "down", "j":
-		m.cursor++
+		m.moveCursor(1)
+		return m, nil
+
+	case "pgdown":
+		m.moveCursor(m.pageStep())
+		return m, nil
+
+	case "pgup":
+		m.moveCursor(-m.pageStep())
+		return m, nil
+
+	case "ctrl+d":
+		m.moveCursor(m.halfPageStep())
+		return m, nil
+
+	case "ctrl+u":
+		m.moveCursor(-m.halfPageStep())
+		return m, nil
+
+	case "home":
+		m.cursor = 0
+		m.clampCursor()
+		return m, nil
+
+	case "end":
+		m.cursor = m.rowCount() - 1
 		m.clampCursor()
 		return m, nil
 
@@ -142,6 +169,7 @@ func (m *Model) goBack() (tea.Model, tea.Cmd) {
 	if m.filter.Value() != "" {
 		m.filter.SetValue("")
 		m.cursor = 0
+		m.offset = 0
 		m.clampCursor()
 		return m, nil
 	}
@@ -150,10 +178,12 @@ func (m *Model) goBack() (tea.Model, tea.Cmd) {
 		m.nav = levelOwners
 		m.selOwner = ""
 		m.cursor = 0
+		m.offset = 0
 	case levelOwners:
 		m.nav = levelProviders
 		m.selProvider = nil
 		m.cursor = 0
+		m.offset = 0
 	}
 	m.clampCursor()
 	return m, nil
@@ -171,6 +201,7 @@ func (m *Model) enter() (tea.Model, tea.Cmd) {
 			m.selProvider = m.providers[m.cursor]
 			m.nav = levelOwners
 			m.cursor = 0
+			m.offset = 0
 			m.clampCursor()
 		}
 	case levelOwners:
@@ -179,6 +210,7 @@ func (m *Model) enter() (tea.Model, tea.Cmd) {
 			m.selOwner = owners[m.cursor]
 			m.nav = levelRepos
 			m.cursor = 0
+			m.offset = 0
 			m.clampCursor()
 		}
 	case levelRepos:

@@ -21,10 +21,14 @@ func (m *Model) View() string {
 		return ""
 	}
 
+	// bodyText mutates m.offset via applyWindow and records the indicator range.
+	// Bubble Tea calls Update then View, so writing offset here is safe.
+	body := m.bodyText()
+
 	var b strings.Builder
 	b.WriteString(titleStyle.Render(m.headerText()))
 	b.WriteString("\n\n")
-	b.WriteString(m.bodyText())
+	b.WriteString(body)
 	b.WriteString("\n")
 	if m.filtering || m.filter.Value() != "" {
 		b.WriteString(m.filter.View())
@@ -34,6 +38,8 @@ func (m *Model) View() string {
 		b.WriteString(dimStyle.Render(m.status))
 		b.WriteString("\n")
 	}
+	b.WriteString(dimStyle.Render(m.indicatorText))
+	b.WriteString("\n")
 	b.WriteString(footerStyle.Render(m.footerText()))
 	b.WriteString("\n")
 	return b.String()
@@ -66,15 +72,21 @@ func (m *Model) bodyText() string {
 	}
 }
 
-// renderStrings renders a simple string list with cursor highlighting.
+// renderStrings renders a simple string list with cursor highlighting, windowed
+// to the visible slice. It sets m.indicatorText for the current window.
 func (m *Model) renderStrings(rows []string) string {
-	if len(rows) == 0 {
+	n := len(rows)
+	if n == 0 {
+		m.indicatorText = ""
 		return dimStyle.Render("(nothing here)")
 	}
+	first, last := m.applyWindow(n)
+	m.indicatorText = indicator(first, last, n)
 	var b strings.Builder
-	for i, r := range rows {
+	// i is the absolute row index so cursor highlighting tracks correctly.
+	for i := first; i < last; i++ {
 		prefix := "  "
-		line := r
+		line := rows[i]
 		if i == m.cursor {
 			prefix = "> "
 			line = cursorStyle.Render(line)
@@ -84,13 +96,20 @@ func (m *Model) renderStrings(rows []string) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// renderRepos renders repo rows with cloned/selected indicators.
+// renderRepos renders repo rows with cloned/selected indicators, windowed to the
+// visible slice. It sets m.indicatorText for the current window.
 func (m *Model) renderRepos(rows []repoItem) string {
-	if len(rows) == 0 {
+	n := len(rows)
+	if n == 0 {
+		m.indicatorText = ""
 		return dimStyle.Render("(no repositories)")
 	}
+	first, last := m.applyWindow(n)
+	m.indicatorText = indicator(first, last, n)
 	var b strings.Builder
-	for i, it := range rows {
+	// i is the absolute row index so cursor highlighting tracks correctly.
+	for i := first; i < last; i++ {
+		it := rows[i]
 		prefix := "  "
 		if i == m.cursor {
 			prefix = "> "
@@ -114,11 +133,18 @@ func (m *Model) renderRepos(rows []repoItem) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
+// indicator formats the position indicator "first-last of n" (1-based) for the
+// [first, last) window over n rows.
+func indicator(first, last, n int) string {
+	return fmt.Sprintf("%d-%d of %d", first+1, last, n)
+}
+
 // footerText renders the keybinding help bar.
 func (m *Model) footerText() string {
 	if m.filtering {
 		return "enter: apply  esc: cancel filter"
 	}
-	return "up/down: move  enter: drill/clone  /: filter  space: select  " +
+	return "up/down: move  pgup/pgdn ^u/^d: page  home/end: ends  " +
+		"enter: drill/clone  /: filter  space: select  " +
 		"c: clone  o: open  r: refresh  esc: back  q: quit"
 }

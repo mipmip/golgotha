@@ -77,6 +77,12 @@ type Model struct {
 
 	// cursor is the highlighted row index into the currently visible list.
 	cursor int
+	// offset is the index of the top visible row (scroll position) for the
+	// current level. Reset to 0 wherever the cursor resets.
+	offset int
+	// indicatorText is the position indicator (e.g. "41-60 of 213") computed by
+	// the render pass and shown by View. It is a transient render artifact.
+	indicatorText string
 
 	// filtering reports whether the fuzzy filter input is active.
 	filtering bool
@@ -244,6 +250,36 @@ func (m *Model) clampCursor() {
 	if m.cursor >= n {
 		m.cursor = n - 1
 	}
+}
+
+// moveCursor moves the cursor by delta rows and clamps it. The window follows
+// on the next render via applyWindow.
+func (m *Model) moveCursor(delta int) {
+	m.cursor += delta
+	m.clampCursor()
+}
+
+// pageStep is the number of rows a PgUp/PgDn moves: one visible screen. It falls
+// back to the current list length when the height is unknown (sentinel).
+func (m *Model) pageStep() int {
+	v := m.visibleRows()
+	if v <= 0 {
+		if n := m.rowCount(); n > 0 {
+			return n
+		}
+		return 1
+	}
+	return v
+}
+
+// halfPageStep is the number of rows a Ctrl-U/Ctrl-D moves: half a visible
+// screen, at least 1.
+func (m *Model) halfPageStep() int {
+	step := m.pageStep() / 2
+	if step < 1 {
+		step = 1
+	}
+	return step
 }
 
 // currentRepo returns the highlighted repo item when at the repos level (or when
