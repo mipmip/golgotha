@@ -16,6 +16,7 @@ import (
 	"github.com/mipmip/skull2/internal/config"
 	"github.com/mipmip/skull2/internal/provider"
 	"github.com/mipmip/skull2/internal/syncer"
+	"github.com/mipmip/skull2/internal/tui"
 )
 
 // version is overridden at build time via -ldflags "-X main.version=...".
@@ -38,9 +39,11 @@ func run(args []string) error {
 	case "version", "--version", "-v":
 		fmt.Println("skull2", version)
 		return nil
-	case "", "help", "-h", "--help":
+	case "help", "-h", "--help":
 		usage(os.Stdout)
 		return nil
+	case "", "tui":
+		return runTUI()
 	case "config":
 		return runConfig(args[1:])
 	case "refresh":
@@ -51,6 +54,16 @@ func run(args []string) error {
 		usage(os.Stderr)
 		return fmt.Errorf("unknown command %q", cmd)
 	}
+}
+
+// runTUI loads the configuration and launches the interactive Bubble Tea
+// browser. It is the default command (bare `skull2`) and `skull2 tui`.
+func runTUI() error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	return tui.Run(cfg)
 }
 
 // runConfig handles the `config` subcommand: `path` and `check`.
@@ -261,10 +274,10 @@ Usage:
   skull2 [command]
 
 Commands:
-  tui              Browse and clone repositories (default, planned)
+  tui              Browse and clone repositories (default)
   sync             Clone missing and fast-forward-pull existing repos
-  refresh          Refresh the per-provider cache (planned)
-  config           Show or validate configuration (planned)
+  refresh          Refresh the per-provider cache
+  config           Show or validate configuration
   version          Print the version
   help             Show this help
 

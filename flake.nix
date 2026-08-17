@@ -24,7 +24,7 @@
           inherit version;
           src = self;
           # Update when Go dependencies change; nix reports the expected hash.
-          vendorHash = "sha256-g+yaVIx4jxpAQ/+WrGKxhVeliYx7nLQe/zsGpxV4Fn4=";
+          vendorHash = "sha256-aJllcMJduoi8VBWMJWsxm8swXtNonYZzX8etmNZePzc=";
           subPackages = [ "cmd/skull2" ];
           # Tests run in the dedicated `gotest` check (which provides git).
           doCheck = false;

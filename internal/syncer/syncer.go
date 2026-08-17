@@ -91,6 +91,44 @@ func NewEngine(g Git, cfg *config.Config) *Engine {
 	return &Engine{Git: g, Cfg: cfg}
 }
 
+// CloneRepo clones a single repository for provider p to its templated target
+// path, reusing the same clone-URL, path resolution and git logic as a full
+// sync. It is a no-op returning ActionUpdated=false semantics only insofar as it
+// reports the result; callers (e.g. the TUI) use it to clone one repo on demand.
+// If a repository already exists at the target it is left untouched and the
+// returned Result carries ActionSkipped.
+func (e *Engine) CloneRepo(ctx context.Context, p *config.Provider, r provider.Repo) Result {
+	res := Result{Repo: r}
+
+	target, err := clonepath.RenderFor(e.Cfg, p, p.WebURL, r.Owner, r.Name)
+	if err != nil {
+		res.Action = ActionFailed
+		res.Err = fmt.Errorf("resolving target path: %w", err)
+		return res
+	}
+	res.Path = target
+
+	if e.Git.IsRepo(target) {
+		res.Action = ActionSkipped
+		res.Warning = fmt.Sprintf("already cloned at %s", target)
+		return res
+	}
+
+	url := cloneURL(p, r)
+	if url == "" {
+		res.Action = ActionFailed
+		res.Err = fmt.Errorf("no %s clone URL for %s/%s", p.CloneProtocol, r.Owner, r.Name)
+		return res
+	}
+	if err := e.Git.Clone(ctx, url, target); err != nil {
+		res.Action = ActionFailed
+		res.Err = fmt.Errorf("cloning %s: %w", url, err)
+		return res
+	}
+	res.Action = ActionCloned
+	return res
+}
+
 // SyncProvider reconciles one provider's repositories against the filesystem and
 // returns its summary. Per-repo failures are collected and never abort the run.
 func (e *Engine) SyncProvider(ctx context.Context, p *config.Provider, repos []provider.Repo) ProviderSummary {
