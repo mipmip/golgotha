@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/mipmip/skull2/internal/config"
+	"github.com/mipmip/golgotha/internal/config"
 )
 
 // Constructor builds a Provider from its configuration.

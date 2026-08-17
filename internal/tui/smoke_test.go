@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mipmip/skull2/internal/cache"
-	"github.com/mipmip/skull2/internal/config"
-	"github.com/mipmip/skull2/internal/provider"
+	"github.com/mipmip/golgotha/internal/cache"
+	"github.com/mipmip/golgotha/internal/config"
+	"github.com/mipmip/golgotha/internal/provider"
 )
 
 // TestNewFromCacheSmoke constructs the initial model from a temp cache and calls
@@ -18,7 +18,7 @@ func TestNewFromCacheSmoke(t *testing.T) {
 	if err := cache.Save("github", cache.Cache{
 		FetchedAt: time.Now().UTC(),
 		Repos: []provider.Repo{
-			{Owner: "mipmip", Name: "skull2", WebURL: "https://github.com/mipmip/skull2"},
+			{Owner: "mipmip", Name: "golgotha", WebURL: "https://github.com/mipmip/golgotha"},
 			{Owner: "acme", Name: "widgets", WebURL: "https://github.com/acme/widgets"},
 		},
 	}); err != nil {

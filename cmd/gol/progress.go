@@ -6,9 +6,9 @@ import (
 	"io"
 	"sync"
 
-	"github.com/mipmip/skull2/internal/config"
-	"github.com/mipmip/skull2/internal/fetch"
-	"github.com/mipmip/skull2/internal/provider"
+	"github.com/mipmip/golgotha/internal/config"
+	"github.com/mipmip/golgotha/internal/fetch"
+	"github.com/mipmip/golgotha/internal/provider"
 )
 
 // ownerResult is one owner's fetch outcome from the bounded-parallel sweep.

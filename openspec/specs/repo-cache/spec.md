@@ -6,7 +6,7 @@ TBD - created by archiving change add-provider-clients-and-cache. Update Purpose
 ### Requirement: Persist per-provider repository cache
 
 The system SHALL persist each provider's repositories to
-`~/.cache/skull2/<provider>.json` with a fetch timestamp, writing atomically.
+`~/.cache/golgotha/<provider>.json` with a fetch timestamp, writing atomically.
 
 #### Scenario: Write and read round-trip
 
@@ -28,17 +28,17 @@ The system SHALL persist each provider's repositories to
 
 ### Requirement: Refresh command
 
-The system SHALL provide `skull2 refresh` to re-fetch repositories from the
+The system SHALL provide `gol refresh` to re-fetch repositories from the
 providers and update the cache.
 
 #### Scenario: Refresh all providers
 
-- **WHEN** the user runs `skull2 refresh`
+- **WHEN** the user runs `gol refresh`
 - **THEN** every configured provider is listed and its cache file is updated
 
 #### Scenario: Refresh a single provider
 
-- **WHEN** the user runs `skull2 refresh --provider NAME`
+- **WHEN** the user runs `gol refresh --provider NAME`
 - **THEN** only that provider is refreshed, and an unknown name exits non-zero
 
 ### Requirement: Owner index with per-owner fetch state

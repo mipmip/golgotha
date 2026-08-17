@@ -9,12 +9,12 @@ func TestFuzzyMatch(t *testing.T) {
 		query  string
 		want   bool
 	}{
-		{"empty query matches", "mipmip/skull2", "", true},
-		{"exact substring", "mipmip/skull2", "skull", true},
-		{"subsequence", "mipmip/skull2", "msk", true},
-		{"case insensitive", "MipMip/Skull2", "mipsk", true},
+		{"empty query matches", "mipmip/golgotha", "", true},
+		{"exact substring", "mipmip/golgotha", "golg", true},
+		{"subsequence", "mipmip/golgotha", "mgl", true},
+		{"case insensitive", "MipMip/Golgotha", "mipgo", true},
 		{"owner and name subsequence", "technative-b-v/foo", "tnfoo", true},
-		{"not a subsequence", "mipmip/skull2", "zzz", false},
+		{"not a subsequence", "mipmip/golgotha", "zzz", false},
 		{"out of order fails", "abc", "cba", false},
 		{"longer than target", "ab", "abc", false},
 	}

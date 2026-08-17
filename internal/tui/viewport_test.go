@@ -6,7 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/mipmip/skull2/internal/provider"
+	"github.com/mipmip/golgotha/internal/provider"
 )
 
 func TestWindow(t *testing.T) {

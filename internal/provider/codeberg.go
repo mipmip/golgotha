@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mipmip/skull2/internal/config"
-	"github.com/mipmip/skull2/internal/fetch"
+	"github.com/mipmip/golgotha/internal/config"
+	"github.com/mipmip/golgotha/internal/fetch"
 )
 
 // defaultCodebergAPI is the public Codeberg base URL. The Gitea/Forgejo REST

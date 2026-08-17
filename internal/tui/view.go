@@ -55,7 +55,7 @@ func (m *Model) View() string {
 
 // headerText renders the breadcrumb / title for the current scope.
 func (m *Model) headerText() string {
-	crumb := "skull2"
+	crumb := "gol"
 	if m.selProvider != nil {
 		crumb += " > " + m.selProvider.Name
 	}
@@ -193,7 +193,7 @@ func (m *Model) detailView() string {
 	var b strings.Builder
 
 	// Breadcrumb / title.
-	crumb := "skull2"
+	crumb := "gol"
 	if it.Provider != nil {
 		crumb += " > " + it.Provider.Name
 	}

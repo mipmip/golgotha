@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mipmip/skull2/internal/provider"
+	"github.com/mipmip/golgotha/internal/provider"
 )
 
 func TestSaveLoadRoundTrip(t *testing.T) {
@@ -42,8 +42,8 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 		t.Fatalf("repos mismatch:\n got %+v\nwant %+v", got.Repos, in.Repos)
 	}
 
-	// File lives at <dir>/skull2/github.json.
-	if _, err := os.Stat(filepath.Join(dir, "skull2", "github.json")); err != nil {
+	// File lives at <dir>/golgotha/github.json.
+	if _, err := os.Stat(filepath.Join(dir, "golgotha", "github.json")); err != nil {
 		t.Fatalf("cache file not at expected path: %v", err)
 	}
 }
@@ -55,7 +55,7 @@ func TestSaveAtomicNoTempLeftBehind(t *testing.T) {
 	if err := Save("gitlab", Cache{FetchedAt: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
-	entries, err := os.ReadDir(filepath.Join(dir, "skull2"))
+	entries, err := os.ReadDir(filepath.Join(dir, "golgotha"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestLoadOrEmptyExisting(t *testing.T) {
 func TestLoadCorruptJSON(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CACHE_HOME", dir)
-	cdir := filepath.Join(dir, "skull2")
+	cdir := filepath.Join(dir, "golgotha")
 	if err := os.MkdirAll(cdir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestLoadCorruptJSON(t *testing.T) {
 
 func TestSaveMkdirError(t *testing.T) {
 	dir := t.TempDir()
-	// Make the XDG cache root a regular file so MkdirAll(<file>/skull2) fails.
+	// Make the XDG cache root a regular file so MkdirAll(<file>/golgotha) fails.
 	f := filepath.Join(dir, "asfile")
 	if err := os.WriteFile(f, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
@@ -145,7 +145,7 @@ func TestSaveThenLoadDefaultProviderMissingReadError(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", dir)
 	// Create the provider path as a directory so ReadFile fails with a non
 	// not-exist error, exercising Load's read-error branch.
-	cdir := filepath.Join(dir, "skull2")
+	cdir := filepath.Join(dir, "golgotha")
 	if err := os.MkdirAll(filepath.Join(cdir, "dirprov.json"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func TestSaveThenLoadDefaultProviderMissingReadError(t *testing.T) {
 func TestSaveRenameError(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CACHE_HOME", dir)
-	cdir := filepath.Join(dir, "skull2")
+	cdir := filepath.Join(dir, "golgotha")
 	// Pre-create the final path as a directory so os.Rename(tmpfile, final) fails.
 	if err := os.MkdirAll(filepath.Join(cdir, "github.json"), 0o755); err != nil {
 		t.Fatal(err)
@@ -202,7 +202,7 @@ func TestSaveOverwritesExisting(t *testing.T) {
 func TestSaveTempCreateError(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CACHE_HOME", dir)
-	cdir := filepath.Join(dir, "skull2")
+	cdir := filepath.Join(dir, "golgotha")
 	if err := os.MkdirAll(cdir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +238,7 @@ func TestDirFallbackToHome(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d != filepath.Join(home, ".cache", "skull2") {
+	if d != filepath.Join(home, ".cache", "golgotha") {
 		t.Fatalf("dir = %q", d)
 	}
 }
@@ -250,7 +250,7 @@ func TestPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if p != filepath.Join(dir, "skull2", "github.json") {
+	if p != filepath.Join(dir, "golgotha", "github.json") {
 		t.Fatalf("path = %q", p)
 	}
 }
@@ -354,7 +354,7 @@ func TestSetOwnersDropsRemovedOwnerRepos(t *testing.T) {
 func TestLegacyFlatCacheRead(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CACHE_HOME", dir)
-	cdir := filepath.Join(dir, "skull2")
+	cdir := filepath.Join(dir, "golgotha")
 	if err := os.MkdirAll(cdir, 0o755); err != nil {
 		t.Fatal(err)
 	}

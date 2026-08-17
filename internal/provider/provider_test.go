@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mipmip/skull2/internal/config"
+	"github.com/mipmip/golgotha/internal/config"
 )
 
 func boolPtr(b bool) *bool { return &b }
@@ -154,37 +154,37 @@ func TestResolveToken(t *testing.T) {
 	}{
 		{
 			name:   "cli token used",
-			prov:   config.Provider{Name: "gh", Auth: config.Auth{CLI: "gh", Env: "SKULL2_GH"}},
+			prov:   config.Provider{Name: "gh", Auth: config.Auth{CLI: "gh", Env: "GOLGOTHA_GH"}},
 			getter: stubGetter{token: "cli-tok", ok: true},
-			env:    map[string]string{"SKULL2_GH": "env-tok"},
+			env:    map[string]string{"GOLGOTHA_GH": "env-tok"},
 			want:   "cli-tok",
 		},
 		{
 			name:   "env fallback when cli has no token",
-			prov:   config.Provider{Name: "gh", Auth: config.Auth{CLI: "gh", Env: "SKULL2_GH"}},
+			prov:   config.Provider{Name: "gh", Auth: config.Auth{CLI: "gh", Env: "GOLGOTHA_GH"}},
 			getter: stubGetter{ok: false},
-			env:    map[string]string{"SKULL2_GH": "env-tok"},
+			env:    map[string]string{"GOLGOTHA_GH": "env-tok"},
 			want:   "env-tok",
 		},
 		{
 			name:   "env fallback when cli errors",
-			prov:   config.Provider{Name: "gh", Auth: config.Auth{CLI: "gh", Env: "SKULL2_GH"}},
+			prov:   config.Provider{Name: "gh", Auth: config.Auth{CLI: "gh", Env: "GOLGOTHA_GH"}},
 			getter: stubGetter{err: errors.New("gh missing")},
-			env:    map[string]string{"SKULL2_GH": "env-tok"},
+			env:    map[string]string{"GOLGOTHA_GH": "env-tok"},
 			want:   "env-tok",
 		},
 		{
 			name: "env only provider",
-			prov: config.Provider{Name: "cb", Auth: config.Auth{Env: "SKULL2_CB"}},
-			env:  map[string]string{"SKULL2_CB": "cb-tok"},
+			prov: config.Provider{Name: "cb", Auth: config.Auth{Env: "GOLGOTHA_CB"}},
+			env:  map[string]string{"GOLGOTHA_CB": "cb-tok"},
 			want: "cb-tok",
 		},
 		{
 			name:    "no credential names env var",
-			prov:    config.Provider{Name: "gh", Auth: config.Auth{CLI: "gh", Env: "SKULL2_GH"}},
+			prov:    config.Provider{Name: "gh", Auth: config.Auth{CLI: "gh", Env: "GOLGOTHA_GH"}},
 			getter:  stubGetter{ok: false},
 			env:     map[string]string{},
-			wantErr: "SKULL2_GH",
+			wantErr: "GOLGOTHA_GH",
 		},
 		{
 			name:    "no credential cli only",
@@ -201,9 +201,9 @@ func TestResolveToken(t *testing.T) {
 		},
 		{
 			name:    "empty env value falls through to error",
-			prov:    config.Provider{Name: "gh", Auth: config.Auth{Env: "SKULL2_GH"}},
-			env:     map[string]string{"SKULL2_GH": ""},
-			wantErr: "SKULL2_GH",
+			prov:    config.Provider{Name: "gh", Auth: config.Auth{Env: "GOLGOTHA_GH"}},
+			env:     map[string]string{"GOLGOTHA_GH": ""},
+			wantErr: "GOLGOTHA_GH",
 		},
 	}
 

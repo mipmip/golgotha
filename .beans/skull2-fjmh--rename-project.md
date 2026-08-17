@@ -1,11 +1,11 @@
 ---
 # skull2-fjmh
 title: rename project
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-08-17T18:43:01Z
-updated_at: 2026-08-17T19:26:23Z
+updated_at: 2026-08-17T21:12:29Z
 parent: skull2-qati
 ---
 

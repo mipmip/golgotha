@@ -5,13 +5,13 @@ TBD - created by archiving change add-config-loading. Update Purpose after archi
 ## Requirements
 ### Requirement: Load configuration from the default location
 
-The system SHALL load configuration from `~/.config/skull2/config.yaml`,
+The system SHALL load configuration from `~/.config/golgotha/config.yaml`,
 parsing it into typed global and per-provider settings.
 
 #### Scenario: Valid config file is loaded
 
-- **WHEN** `~/.config/skull2/config.yaml` exists and is valid YAML matching the
-  schema
+- **WHEN** `~/.config/golgotha/config.yaml` exists and is valid YAML matching
+  the schema
 - **THEN** the system returns a typed configuration containing `base_dir`, the
   clone-path template, and the list of providers with their settings
 
@@ -72,21 +72,21 @@ clear, actionable message.
 
 ### Requirement: Config CLI subcommands
 
-The system SHALL expose the configuration through `skull2 config` subcommands.
+The system SHALL expose the configuration through `gol config` subcommands.
 
 #### Scenario: Print the config path
 
-- **WHEN** the user runs `skull2 config path`
+- **WHEN** the user runs `gol config path`
 - **THEN** the system prints the resolved config file path and exits zero
 
 #### Scenario: Validate the config
 
-- **WHEN** the user runs `skull2 config check` with a valid config
+- **WHEN** the user runs `gol config check` with a valid config
 - **THEN** the system prints a success summary and exits zero
 
 #### Scenario: Report an invalid config
 
-- **WHEN** the user runs `skull2 config check` with an invalid config
+- **WHEN** the user runs `gol config check` with an invalid config
 - **THEN** the system prints the validation error and exits non-zero
 
 ### Requirement: Owner discovery configuration

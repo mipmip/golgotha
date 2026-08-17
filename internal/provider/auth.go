@@ -5,7 +5,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/mipmip/skull2/internal/config"
+	"github.com/mipmip/golgotha/internal/config"
 )
 
 // EnvLookup looks up an environment variable, returning its value and whether

@@ -1,5 +1,5 @@
 {
-  description = "Skull2 - multi-provider git portfolio manager";
+  description = "Golgotha - multi-provider git portfolio manager";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
@@ -22,18 +22,18 @@
     {
       packages = forAllSystems (pkgs: {
         default = pkgs.buildGoModule {
-          pname = "skull2";
+          pname = "gol";
           inherit version;
           src = self;
           # Update when Go dependencies change; nix reports the expected hash.
           vendorHash = "sha256-O8m7D4AXhKhob7+E9AUpfNQ2By188sdaLjPCVYie4tE=";
-          subPackages = [ "cmd/skull2" ];
+          subPackages = [ "cmd/gol" ];
           # Tests run in the dedicated `gotest` check (which provides git).
           doCheck = false;
           ldflags = [ "-s" "-w" "-X main.version=${version}" ];
           meta = {
             description = "Multi-provider git portfolio manager";
-            mainProgram = "skull2";
+            mainProgram = "gol";
           };
         };
       });
@@ -60,14 +60,14 @@
         # Test + coverage gate: runs the whole suite (incl. e2e) via
         # scripts/coverage.sh and fails below >=70% overall / >=80% core.
         coverage = self.packages.${pkgs.system}.default.overrideAttrs (old: {
-          pname = "skull2-coverage";
+          pname = "gol-coverage";
           doCheck = true;
           # Sync/e2e tests shell out to git against local temp repos.
           nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.git pkgs.bash ];
           preCheck = ''
             export HOME=$(mktemp -d)
-            git config --global user.email test@skull2.invalid
-            git config --global user.name "skull2 tests"
+            git config --global user.email test@golgotha.invalid
+            git config --global user.name "golgotha tests"
             git config --global init.defaultBranch main
           '';
           checkPhase = ''

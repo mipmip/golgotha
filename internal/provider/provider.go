@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mipmip/skull2/internal/config"
+	"github.com/mipmip/golgotha/internal/config"
 )
 
 // Repo is the provider-agnostic repository model shared by the cache, sync and

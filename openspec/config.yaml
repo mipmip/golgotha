@@ -4,18 +4,18 @@ schema: spec-driven
 # This is shown to AI when creating artifacts.
 # Full briefing lives in BRIEFING.md; this is the condensed version.
 context: |
-  Skull2 — multi-provider git portfolio manager (PoC / alpha base).
+  Golgotha — multi-provider git portfolio manager (PoC / alpha base).
   Controls a large portfolio of git repos across providers, giving a
   uniform on-disk layout, a TUI to browse/clone, and a cron-friendly
   CLI to sync backups. Full briefing: BRIEFING.md.
 
   Providers: GitHub (gh), Codeberg/Forgejo (cb), GitLab (gl).
   Auth: reuse gh/glab CLIs; PAT via env var fallback for CLI/cron;
-  Codeberg is env-PAT first (SKULL2_<PROVIDER>_TOKEN).
+  Codeberg is env-PAT first (GOLGOTHA_<PROVIDER>_TOKEN).
 
   Stack: Go + Bubble Tea (bubbles, lipgloss) for the TUI. Packaged
   with Nix flakes (plain nix, no flake-utils, multi-arch). VCS is jj;
-  remote git@github.com:mipmip/skull2.git; commit as Pim Snel, no
+  remote git@github.com:mipmip/golgotha.git; commit as Pim Snel, no
   self-promotion, commit after each OpenSpec change is archived.
 
   Clone path: configurable Go text/template `clone_pattern_tpl`
@@ -23,12 +23,12 @@ context: |
   Repo, RepoLower). Default "{{.BaseDir}}/{{.Short}}.{{.OwnerLower}}/{{.Repo}}"
   e.g. github TechNative-B-V/foo -> ~/gh.technative-b-v/foo.
 
-  Config: ~/.config/skull2/config.yaml. Cache: plain JSON per provider
-  under ~/.cache/skull2/. Sync = clone missing + fast-forward pull
+  Config: ~/.config/golgotha/config.yaml. Cache: plain JSON per provider
+  under ~/.cache/golgotha/. Sync = clone missing + fast-forward pull
   existing; never force, skip dirty trees with a warning.
 
   PoC scope: TUI (provider -> owner -> repos, fuzzy filter, single +
-  bulk clone, open in browser, refresh) and headless `skull2 sync`.
+  bulk clone, open in browser, refresh) and headless `gol sync`.
   Non-goals: code search, tmux generator, providers beyond the three.
 
   Tickets: beans (milestone titles prefixed 01, 02, ...). Testing:

@@ -8,9 +8,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/mipmip/skull2/internal/clonepath"
-	"github.com/mipmip/skull2/internal/config"
-	"github.com/mipmip/skull2/internal/provider"
+	"github.com/mipmip/golgotha/internal/clonepath"
+	"github.com/mipmip/golgotha/internal/config"
+	"github.com/mipmip/golgotha/internal/provider"
 )
 
 // Action is the outcome recorded for a single repository.

@@ -1,11 +1,11 @@
-# Skull2 — PoC Briefing
+# Golgotha — PoC Briefing
 
 > This document is the single source of truth for autonomously building the
-> Skull2 PoC (alpha base). It is written to be consumed by `mip:1shotpoc`.
+> Golgotha PoC (alpha base). It is written to be consumed by `mip:1shotpoc`.
 
 ## 1. Purpose
 
-Skull2 controls an ever-growing portfolio of git projects spread across
+Golgotha controls an ever-growing portfolio of git projects spread across
 multiple git providers (GitHub, Codeberg, GitLab today; Bitbucket later). It
 gives a **uniform on-disk directory structure**, a **browsable TUI** for
 discovering and cloning repos, and a **headless CLI** for cron-driven backup
@@ -37,11 +37,11 @@ truth.
 | Providers   | GitHub, Codeberg (Forgejo/Gitea), GitLab                         |
 | Auth        | Reuse `gh` / `glab` CLIs; PAT via env var fallback for CLI/cron   |
 | Sync mode   | Clone missing + fast-forward pull existing (working trees)        |
-| Cache       | Plain JSON file per provider under `~/.cache/skull2/`             |
+| Cache       | Plain JSON file per provider under `~/.cache/golgotha/`             |
 | Clone path  | Configurable Go text/template (`clone_pattern_tpl`) with fields   |
 | Coverage    | Enforced min **70%** overall; **≥80%** on core logic packages    |
 | PoC scope   | TUI browse (fuzzy + hierarchic), clone single/bulk, open browser, CLI sync |
-| VCS         | `jj`; remote `git@github.com:mipmip/skull2.git`; commit as Pim Snel, no self-promo |
+| VCS         | `jj`; remote `git@github.com:mipmip/golgotha.git`; commit as Pim Snel, no self-promo |
 | Tickets     | `beans` milestones/epics, milestone titles prefixed `01`, `02`... |
 | Specs       | OpenSpec proposals + tasks, fully set up before build            |
 | Packaging   | Nix flakes, plain nix (no flake-utils), multi-arch               |
@@ -78,7 +78,7 @@ Provider short codes: `gh` (GitHub), `cb` (Codeberg), `gl` (GitLab).
 
 ## 6. Configuration
 
-Location: `~/.config/skull2/config.yaml`. Proposed schema (Claude may refine
+Location: `~/.config/golgotha/config.yaml`. Proposed schema (Claude may refine
 during OpenSpec, keep it minimal and documented):
 
 ```yaml
@@ -98,7 +98,7 @@ providers:
     # clone_pattern_tpl: "..."      # optional per-provider override
     auth:
       cli: gh                       # reuse this CLI's token when present
-      env: SKULL2_GITHUB_TOKEN      # PAT fallback (headless/cron)
+      env: GOLGOTHA_GITHUB_TOKEN      # PAT fallback (headless/cron)
     owners:                         # optional allow-list; empty = all accessible
       - mipmip
       - TechNative-B-V
@@ -112,7 +112,7 @@ providers:
     web_url: https://codeberg.org
     clone_protocol: ssh
     auth:
-      env: SKULL2_CODEBERG_TOKEN    # env-PAT first (no first-party CLI)
+      env: GOLGOTHA_CODEBERG_TOKEN    # env-PAT first (no first-party CLI)
 
   - name: gitlab
     type: gitlab
@@ -122,7 +122,7 @@ providers:
     clone_protocol: ssh
     auth:
       cli: glab                     # reuse glab token when present
-      env: SKULL2_GITLAB_TOKEN      # PAT fallback (headless/cron)
+      env: GOLGOTHA_GITLAB_TOKEN      # PAT fallback (headless/cron)
 ```
 
 - Auth resolution order per provider: configured `cli` token → `env` PAT →
@@ -132,20 +132,20 @@ providers:
 
 ## 7. Cache
 
-- One JSON file per provider: `~/.cache/skull2/<provider-name>.json`.
+- One JSON file per provider: `~/.cache/golgotha/<provider-name>.json`.
 - Contents: `fetched_at` timestamp + list of repos with: owner, name,
   description, ssh_url, https_url, web_url, default_branch, archived, fork,
   updated_at.
-- TUI reads cache; a refresh action re-fetches from the API. `skull2 sync`
+- TUI reads cache; a refresh action re-fetches from the API. `gol sync`
   refreshes then acts.
 
 ## 8. Commands (CLI surface)
 
-- `skull2` / `skull2 tui` — launch the TUI (default).
-- `skull2 sync [--provider NAME] [--no-refresh]` — headless: refresh cache,
+- `gol` / `gol tui` — launch the TUI (default).
+- `gol sync [--provider NAME] [--no-refresh]` — headless: refresh cache,
   then clone-missing + ff-pull-existing across configured owners. Cron target.
-- `skull2 refresh [--provider NAME]` — refresh cache only.
-- `skull2 config path|check` — show config path / validate config + auth.
+- `gol refresh [--provider NAME]` — refresh cache only.
+- `gol config path|check` — show config path / validate config + auth.
 
 Exit codes and non-interactive output must be cron-friendly (structured,
 line-oriented logging; non-zero on failure).
@@ -204,7 +204,7 @@ milestones/epics throughout.
 ## 13. Definition of done (PoC)
 
 - `nix build` / `nix run` work on supported architectures via the flake.
-- `skull2 sync` clones and updates a configured tree end-to-end (proven by e2e).
+- `gol sync` clones and updates a configured tree end-to-end (proven by e2e).
 - TUI can browse all three providers, fuzzy-find, single/bulk clone to the
   correct templated target paths, and open a repo in the browser.
 - Config + JSON cache act as the single source of truth.

@@ -24,11 +24,11 @@ CORE_MIN=80
 
 # Core-logic packages that must each clear CORE_MIN.
 CORE_PKGS=(
-	"github.com/mipmip/skull2/internal/config"
-	"github.com/mipmip/skull2/internal/clonepath"
-	"github.com/mipmip/skull2/internal/provider"
-	"github.com/mipmip/skull2/internal/cache"
-	"github.com/mipmip/skull2/internal/syncer"
+	"github.com/mipmip/golgotha/internal/config"
+	"github.com/mipmip/golgotha/internal/clonepath"
+	"github.com/mipmip/golgotha/internal/provider"
+	"github.com/mipmip/golgotha/internal/cache"
+	"github.com/mipmip/golgotha/internal/syncer"
 )
 
 echo "==> Running tests with coverage (profile: ${PROFILE})"
@@ -82,7 +82,7 @@ fi
 # Per-core-package gate.
 for pkg in "${CORE_PKGS[@]}"; do
 	cov="$(pkg_coverage "${pkg}")"
-	short="${pkg#github.com/mipmip/skull2/}"
+	short="${pkg#github.com/mipmip/golgotha/}"
 	if [ "${cov}" = "NA" ]; then
 		printf '  %-45s %9s\n' "${short}" "NA"
 		echo "  FAIL: ${short} produced no coverage data"

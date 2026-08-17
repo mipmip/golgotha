@@ -8,11 +8,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/mipmip/skull2/internal/config"
+	"github.com/mipmip/golgotha/internal/config"
 )
 
 func TestGitHubRepoDetailsAndReadme(t *testing.T) {
-	t.Setenv("SKULL2_GITHUB_TOKEN", "tok")
+	t.Setenv("GOLGOTHA_GITHUB_TOKEN", "tok")
 	readme := "# Alpha\n\nHello **world**.\n"
 	mux := http.NewServeMux()
 	mux.HandleFunc("/repos/acme/alpha", func(w http.ResponseWriter, r *http.Request) {
@@ -26,7 +26,7 @@ func TestGitHubRepoDetailsAndReadme(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	cfg := config.Provider{Name: "github", Type: config.ProviderGitHub, Short: "gh", APIURL: srv.URL, Auth: config.Auth{Env: "SKULL2_GITHUB_TOKEN"}}
+	cfg := config.Provider{Name: "github", Type: config.ProviderGitHub, Short: "gh", APIURL: srv.URL, Auth: config.Auth{Env: "GOLGOTHA_GITHUB_TOKEN"}}
 	gh := NewGitHub(cfg, srv.Client())
 
 	d, err := gh.RepoDetails(context.Background(), "acme", "alpha")
@@ -47,12 +47,12 @@ func TestGitHubRepoDetailsAndReadme(t *testing.T) {
 }
 
 func TestGitHubReadmeNotFound(t *testing.T) {
-	t.Setenv("SKULL2_GITHUB_TOKEN", "tok")
+	t.Setenv("GOLGOTHA_GITHUB_TOKEN", "tok")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 	}))
 	defer srv.Close()
-	cfg := config.Provider{Name: "github", Type: config.ProviderGitHub, Short: "gh", APIURL: srv.URL, Auth: config.Auth{Env: "SKULL2_GITHUB_TOKEN"}}
+	cfg := config.Provider{Name: "github", Type: config.ProviderGitHub, Short: "gh", APIURL: srv.URL, Auth: config.Auth{Env: "GOLGOTHA_GITHUB_TOKEN"}}
 	gh := NewGitHub(cfg, srv.Client())
 	md, err := gh.Readme(context.Background(), "acme", "none")
 	if err != nil {
@@ -64,12 +64,12 @@ func TestGitHubReadmeNotFound(t *testing.T) {
 }
 
 func TestGitHubRepoDetailsHTTPError(t *testing.T) {
-	t.Setenv("SKULL2_GITHUB_TOKEN", "tok")
+	t.Setenv("GOLGOTHA_GITHUB_TOKEN", "tok")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "boom", http.StatusInternalServerError)
 	}))
 	defer srv.Close()
-	cfg := config.Provider{Name: "github", Type: config.ProviderGitHub, Short: "gh", APIURL: srv.URL, Auth: config.Auth{Env: "SKULL2_GITHUB_TOKEN"}}
+	cfg := config.Provider{Name: "github", Type: config.ProviderGitHub, Short: "gh", APIURL: srv.URL, Auth: config.Auth{Env: "GOLGOTHA_GITHUB_TOKEN"}}
 	gh := NewGitHub(cfg, srv.Client())
 	if _, err := gh.RepoDetails(context.Background(), "acme", "alpha"); err == nil {
 		t.Fatal("expected http error")
@@ -77,7 +77,7 @@ func TestGitHubRepoDetailsHTTPError(t *testing.T) {
 }
 
 func TestCodebergRepoDetailsAndReadme(t *testing.T) {
-	t.Setenv("SKULL2_CODEBERG_TOKEN", "tok")
+	t.Setenv("GOLGOTHA_CODEBERG_TOKEN", "tok")
 	readme := "# Notes\n\nraw markdown\n"
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/repos/pim/notes", func(w http.ResponseWriter, r *http.Request) {
@@ -92,7 +92,7 @@ func TestCodebergRepoDetailsAndReadme(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	cfg := config.Provider{Name: "codeberg", Type: config.ProviderCodeberg, Short: "cb", APIURL: srv.URL, Auth: config.Auth{Env: "SKULL2_CODEBERG_TOKEN"}}
+	cfg := config.Provider{Name: "codeberg", Type: config.ProviderCodeberg, Short: "cb", APIURL: srv.URL, Auth: config.Auth{Env: "GOLGOTHA_CODEBERG_TOKEN"}}
 	cb := NewCodeberg(cfg, srv.Client())
 
 	d, err := cb.RepoDetails(context.Background(), "pim", "notes")
@@ -112,12 +112,12 @@ func TestCodebergRepoDetailsAndReadme(t *testing.T) {
 }
 
 func TestCodebergReadmeNotFound(t *testing.T) {
-	t.Setenv("SKULL2_CODEBERG_TOKEN", "tok")
+	t.Setenv("GOLGOTHA_CODEBERG_TOKEN", "tok")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", http.StatusNotFound)
 	}))
 	defer srv.Close()
-	cfg := config.Provider{Name: "codeberg", Type: config.ProviderCodeberg, Short: "cb", APIURL: srv.URL, Auth: config.Auth{Env: "SKULL2_CODEBERG_TOKEN"}}
+	cfg := config.Provider{Name: "codeberg", Type: config.ProviderCodeberg, Short: "cb", APIURL: srv.URL, Auth: config.Auth{Env: "GOLGOTHA_CODEBERG_TOKEN"}}
 	cb := NewCodeberg(cfg, srv.Client())
 	md, err := cb.Readme(context.Background(), "pim", "none")
 	if err != nil || md != "" {
@@ -126,7 +126,7 @@ func TestCodebergReadmeNotFound(t *testing.T) {
 }
 
 func TestGitLabRepoDetailsAndReadme(t *testing.T) {
-	t.Setenv("SKULL2_GITLAB_TOKEN", "tok")
+	t.Setenv("GOLGOTHA_GITLAB_TOKEN", "tok")
 	readme := "# Widget\n\nGitLab raw\n"
 	mux := http.NewServeMux()
 	// project details (used for both details and README default-branch lookup).
@@ -145,7 +145,7 @@ func TestGitLabRepoDetailsAndReadme(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	cfg := config.Provider{Name: "gitlab", Type: config.ProviderGitLab, Short: "gl", APIURL: srv.URL, Auth: config.Auth{Env: "SKULL2_GITLAB_TOKEN"}}
+	cfg := config.Provider{Name: "gitlab", Type: config.ProviderGitLab, Short: "gl", APIURL: srv.URL, Auth: config.Auth{Env: "GOLGOTHA_GITLAB_TOKEN"}}
 	gl := NewGitLab(cfg, srv.Client())
 
 	d, err := gl.RepoDetails(context.Background(), "acme", "widget")
@@ -165,7 +165,7 @@ func TestGitLabRepoDetailsAndReadme(t *testing.T) {
 }
 
 func TestGitLabReadmeNotFound(t *testing.T) {
-	t.Setenv("SKULL2_GITLAB_TOKEN", "tok")
+	t.Setenv("GOLGOTHA_GITLAB_TOKEN", "tok")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/projects/acme%2Fwidget", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `{"star_count":0,"default_branch":"main"}`)
@@ -175,7 +175,7 @@ func TestGitLabReadmeNotFound(t *testing.T) {
 	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
-	cfg := config.Provider{Name: "gitlab", Type: config.ProviderGitLab, Short: "gl", APIURL: srv.URL, Auth: config.Auth{Env: "SKULL2_GITLAB_TOKEN"}}
+	cfg := config.Provider{Name: "gitlab", Type: config.ProviderGitLab, Short: "gl", APIURL: srv.URL, Auth: config.Auth{Env: "GOLGOTHA_GITLAB_TOKEN"}}
 	gl := NewGitLab(cfg, srv.Client())
 	md, err := gl.Readme(context.Background(), "acme", "widget")
 	if err != nil || md != "" {

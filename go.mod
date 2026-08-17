@@ -1,4 +1,4 @@
-module github.com/mipmip/skull2
+module github.com/mipmip/golgotha
 
 go 1.26
 

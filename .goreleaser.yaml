@@ -1,4 +1,4 @@
-# goreleaser configuration for skull2.
+# goreleaser configuration for golgotha.
 # Docs: https://goreleaser.com
 #
 # The flake owns reproducible dev/build; goreleaser owns the release artifacts
@@ -7,16 +7,16 @@
 # VERSION-file default embedded in the binary.
 version: 2
 
-project_name: skull2
+project_name: golgotha
 
 before:
   hooks:
     - go mod tidy
 
 builds:
-  - id: skull2
-    main: ./cmd/skull2
-    binary: skull2
+  - id: gol
+    main: ./cmd/gol
+    binary: gol
     env:
       - CGO_ENABLED=0
     goos:
@@ -29,7 +29,7 @@ builds:
       - -s -w -X main.version={{ .Version }}
 
 archives:
-  - id: skull2
+  - id: gol
     formats: [tar.gz]
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
@@ -46,4 +46,4 @@ changelog:
 release:
   github:
     owner: mipmip
-    name: skull2
+    name: golgotha

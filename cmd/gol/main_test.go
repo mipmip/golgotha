@@ -10,18 +10,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mipmip/skull2/internal/cache"
-	"github.com/mipmip/skull2/internal/config"
-	"github.com/mipmip/skull2/internal/provider"
+	"github.com/mipmip/golgotha/internal/cache"
+	"github.com/mipmip/golgotha/internal/config"
+	"github.com/mipmip/golgotha/internal/provider"
 )
 
 func gitEnvT(t *testing.T) {
 	t.Helper()
 	for _, kv := range [][2]string{
-		{"GIT_AUTHOR_NAME", "Skull2 Test"},
-		{"GIT_AUTHOR_EMAIL", "test@skull2.invalid"},
-		{"GIT_COMMITTER_NAME", "Skull2 Test"},
-		{"GIT_COMMITTER_EMAIL", "test@skull2.invalid"},
+		{"GIT_AUTHOR_NAME", "Golgotha Test"},
+		{"GIT_AUTHOR_EMAIL", "test@golgotha.invalid"},
+		{"GIT_COMMITTER_NAME", "Golgotha Test"},
+		{"GIT_COMMITTER_EMAIL", "test@golgotha.invalid"},
 		{"GIT_CONFIG_GLOBAL", "/dev/null"},
 		{"GIT_CONFIG_SYSTEM", "/dev/null"},
 		{"GIT_TERMINAL_PROMPT", "0"},
@@ -68,7 +68,7 @@ func TestRunSyncEndToEnd(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", cfgHome)
 	t.Setenv("XDG_CACHE_HOME", cacheHome)
 
-	cfgDir := filepath.Join(cfgHome, "skull2")
+	cfgDir := filepath.Join(cfgHome, "golgotha")
 	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ func TestRunSyncEndToEnd(t *testing.T) {
 	}
 	// Sanity: the cache round-trips as JSON.
 	var check cache.Cache
-	raw, _ := os.ReadFile(filepath.Join(cacheHome, "skull2", "test.json"))
+	raw, _ := os.ReadFile(filepath.Join(cacheHome, "golgotha", "test.json"))
 	if err := json.Unmarshal(raw, &check); err != nil {
 		t.Fatalf("cache json invalid: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestRunSyncEndToEnd(t *testing.T) {
 func TestRunSyncUnknownProvider(t *testing.T) {
 	cfgHome := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", cfgHome)
-	cfgDir := filepath.Join(cfgHome, "skull2")
+	cfgDir := filepath.Join(cfgHome, "golgotha")
 	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestRunSyncNoCacheNoFailure(t *testing.T) {
 	cacheHome := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", cfgHome)
 	t.Setenv("XDG_CACHE_HOME", cacheHome)
-	cfgDir := filepath.Join(cfgHome, "skull2")
+	cfgDir := filepath.Join(cfgHome, "golgotha")
 	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
 		t.Fatal(err)
 	}

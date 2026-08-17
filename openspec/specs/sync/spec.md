@@ -40,12 +40,12 @@ The system SHALL report a per-provider summary of the run.
 
 ### Requirement: Sync command
 
-The system SHALL provide `skull2 sync [--provider NAME] [--no-refresh]` suitable
+The system SHALL provide `gol sync [--provider NAME] [--no-refresh]` suitable
 for cron.
 
 #### Scenario: Refresh then sync
 
-- **WHEN** the user runs `skull2 sync` without `--no-refresh`
+- **WHEN** the user runs `gol sync` without `--no-refresh`
 - **THEN** the cache is refreshed before the engine runs
 
 #### Scenario: Non-zero exit on failure
@@ -55,13 +55,13 @@ for cron.
 
 ### Requirement: Eager discovery sweep on sync
 
-When `all_owners` is enabled, `skull2 sync` and `skull2 refresh` SHALL discover
+When `all_owners` is enabled, `gol sync` and `gol refresh` SHALL discover
 owners and fetch repositories for the entire resolved owner set, so the cache
 and backups cover every org.
 
 #### Scenario: Sync covers all discovered owners
 
-- **WHEN** `skull2 sync` runs for a provider with `all_owners: true`
+- **WHEN** `gol sync` runs for a provider with `all_owners: true`
 - **THEN** it discovers owners, fetches repositories for every owner in the
   resolved set (minus exclusions), updates the cache, and clones/pulls them
 
@@ -72,7 +72,7 @@ and backups cover every org.
 
 ### Requirement: CLI fetch progress output
 
-`skull2 sync` and `skull2 refresh` SHALL print progress derived from the fetch
+`gol sync` and `gol refresh` SHALL print progress derived from the fetch
 event stream.
 
 #### Scenario: Per-owner progress lines

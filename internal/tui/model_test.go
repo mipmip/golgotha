@@ -7,8 +7,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/mipmip/skull2/internal/config"
-	"github.com/mipmip/skull2/internal/provider"
+	"github.com/mipmip/golgotha/internal/config"
+	"github.com/mipmip/golgotha/internal/provider"
 )
 
 // fakeCloner records clone calls and returns a canned result.
@@ -42,7 +42,7 @@ func newTestModel(t *testing.T) (*Model, *fakeCloner) {
 		checkCloned:     func(string) bool { return false },
 	}
 	m.reposByProvider["github"] = []repoItem{
-		{Repo: provider.Repo{Owner: "mipmip", Name: "skull2", WebURL: "https://github.com/mipmip/skull2"}, Provider: pGH, Target: "/tmp/a"},
+		{Repo: provider.Repo{Owner: "mipmip", Name: "golgotha", WebURL: "https://github.com/mipmip/golgotha"}, Provider: pGH, Target: "/tmp/a"},
 		{Repo: provider.Repo{Owner: "mipmip", Name: "dotfiles", WebURL: "https://github.com/mipmip/dotfiles"}, Provider: pGH, Target: "/tmp/b"},
 		{Repo: provider.Repo{Owner: "acme", Name: "widgets", WebURL: "https://github.com/acme/widgets"}, Provider: pGH, Target: "/tmp/c"},
 	}
@@ -129,7 +129,7 @@ func TestCursorMovementClamps(t *testing.T) {
 
 func TestFilterNarrowsReposAtReposLevel(t *testing.T) {
 	m, _ := newTestModel(t)
-	// Drill into github > mipmip (skull2, dotfiles).
+	// Drill into github > mipmip (golgotha, dotfiles).
 	send(m, key("enter")) // owners
 	send(m, key("j"))     // mipmip
 	send(m, key("enter")) // repos of mipmip
@@ -141,20 +141,20 @@ func TestFilterNarrowsReposAtReposLevel(t *testing.T) {
 	if !m.filtering {
 		t.Fatal("expected filtering active")
 	}
-	// type "skull" -> only mipmip/skull2
-	for _, r := range "skull" {
+	// type "golg" -> only mipmip/golgotha
+	for _, r := range "golg" {
 		send(m, key(string(r)))
 	}
 	repos := m.visibleRepos()
-	if len(repos) != 1 || repos[0].key() != "mipmip/skull2" {
-		t.Fatalf("expected only mipmip/skull2, got %v", repos)
+	if len(repos) != 1 || repos[0].key() != "mipmip/golgotha" {
+		t.Fatalf("expected only mipmip/golgotha, got %v", repos)
 	}
 	// apply filter (enter leaves filtering mode but keeps query)
 	send(m, key("enter"))
 	if m.filtering {
 		t.Fatal("expected filtering mode to end on enter")
 	}
-	if m.filter.Value() != "skull" {
+	if m.filter.Value() != "golg" {
 		t.Fatalf("expected filter kept, got %q", m.filter.Value())
 	}
 	// esc clears the query
@@ -324,7 +324,7 @@ func TestBulkCloneMarksAllAndClearsSelection(t *testing.T) {
 	m, fc := newTestModel(t)
 	send(m, key("enter")) // owners
 	send(m, key("j"))     // mipmip
-	send(m, key("enter")) // repos (skull2, dotfiles)
+	send(m, key("enter")) // repos (golgotha, dotfiles)
 	send(m, key("space")) // select first
 	send(m, key("j"))
 	send(m, key("space")) // select second

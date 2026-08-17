@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mipmip/skull2/internal/config"
+	"github.com/mipmip/golgotha/internal/config"
 )
 
 func TestRenderDefaultTemplate(t *testing.T) {

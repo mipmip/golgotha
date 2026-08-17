@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mipmip/skull2/internal/provider"
+	"github.com/mipmip/golgotha/internal/provider"
 )
 
 // Details is the persisted per-repository detail snapshot, cached separately

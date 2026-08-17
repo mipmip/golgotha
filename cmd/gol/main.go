@@ -1,4 +1,4 @@
-// Command skull2 is a multi-provider git portfolio manager.
+// Command gol is a multi-provider git portfolio manager.
 //
 // This is the takeoff scaffolding entrypoint. Subcommands (config, refresh,
 // sync, tui) are implemented across the OpenSpec changes tracked in beans.
@@ -12,12 +12,12 @@ import (
 	"os"
 	"time"
 
-	skull2 "github.com/mipmip/skull2"
-	"github.com/mipmip/skull2/internal/cache"
-	"github.com/mipmip/skull2/internal/config"
-	"github.com/mipmip/skull2/internal/provider"
-	"github.com/mipmip/skull2/internal/syncer"
-	"github.com/mipmip/skull2/internal/tui"
+	golgotha "github.com/mipmip/golgotha"
+	"github.com/mipmip/golgotha/internal/cache"
+	"github.com/mipmip/golgotha/internal/config"
+	"github.com/mipmip/golgotha/internal/provider"
+	"github.com/mipmip/golgotha/internal/syncer"
+	"github.com/mipmip/golgotha/internal/tui"
 )
 
 // version is set at build time via -ldflags "-X main.version=..." (goreleaser
@@ -32,12 +32,12 @@ func resolveVersion() string {
 	if version != "" {
 		return version
 	}
-	return skull2.Version
+	return golgotha.Version
 }
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, "skull2:", err)
+		fmt.Fprintln(os.Stderr, "gol:", err)
 		os.Exit(1)
 	}
 }
@@ -50,7 +50,7 @@ func run(args []string) error {
 
 	switch cmd {
 	case "version", "--version", "-v":
-		fmt.Println("skull2", resolveVersion())
+		fmt.Println("gol", resolveVersion())
 		return nil
 	case "help", "-h", "--help":
 		usage(os.Stdout)
@@ -70,7 +70,7 @@ func run(args []string) error {
 }
 
 // runTUI loads the configuration and launches the interactive Bubble Tea
-// browser. It is the default command (bare `skull2`) and `skull2 tui`.
+// browser. It is the default command (bare `gol`) and `gol tui`.
 func runTUI() error {
 	cfg, err := config.Load()
 	if err != nil {
@@ -112,7 +112,7 @@ func runConfig(args []string) error {
 		}
 		return nil
 	case "", "-h", "--help", "help":
-		fmt.Println("Usage: skull2 config <path|check>")
+		fmt.Println("Usage: gol config <path|check>")
 		return nil
 	default:
 		return fmt.Errorf("unknown config subcommand %q", sub)
@@ -157,21 +157,21 @@ func refreshProviders(ctx context.Context, selected []*config.Provider) error {
 	for _, p := range selected {
 		client, err := reg.Build(p)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "skull2: %s: %v\n", p.Name, err)
+			fmt.Fprintf(os.Stderr, "gol: %s: %v\n", p.Name, err)
 			setErr(err)
 			continue
 		}
 
 		if p.AllOwners {
 			if err := refreshAllOwners(ctx, client, p, printer); err != nil {
-				fmt.Fprintf(os.Stderr, "skull2: %s: %v\n", p.Name, err)
+				fmt.Fprintf(os.Stderr, "gol: %s: %v\n", p.Name, err)
 				setErr(err)
 			}
 			continue
 		}
 
 		if err := refreshExplicitOwners(ctx, client, p, printer); err != nil {
-			fmt.Fprintf(os.Stderr, "skull2: %s: %v\n", p.Name, err)
+			fmt.Fprintf(os.Stderr, "gol: %s: %v\n", p.Name, err)
 			setErr(err)
 		}
 	}
@@ -230,7 +230,7 @@ func refreshAllOwners(ctx context.Context, client provider.Provider, p *config.P
 		return fmt.Errorf("discovering owners: %w", err)
 	}
 	if w := provider.ZeroDiscoveryWarning(p, discovered); w != "" {
-		fmt.Fprintf(os.Stderr, "skull2: warning: %s\n", w)
+		fmt.Fprintf(os.Stderr, "gol: warning: %s\n", w)
 	}
 
 	owners := config.ResolveOwners(p, discovered)
@@ -321,7 +321,7 @@ func runSync(args []string) error {
 		// Refresh errors are logged but do not abort the sync; we still act on
 		// whatever cache is available.
 		if err := refreshProviders(ctx, selected); err != nil {
-			fmt.Fprintf(os.Stderr, "skull2: refresh reported errors: %v\n", err)
+			fmt.Fprintf(os.Stderr, "gol: refresh reported errors: %v\n", err)
 		}
 	}
 
@@ -331,12 +331,12 @@ func runSync(args []string) error {
 	for _, p := range selected {
 		c, ok, err := cache.LoadOrEmpty(p.Name)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "skull2: %s: %v\n", p.Name, err)
+			fmt.Fprintf(os.Stderr, "gol: %s: %v\n", p.Name, err)
 			summary.Providers = append(summary.Providers, syncer.ProviderSummary{Provider: p.Name})
 			continue
 		}
 		if !ok {
-			fmt.Fprintf(os.Stderr, "skull2: %s: no cache; run 'skull2 refresh' first\n", p.Name)
+			fmt.Fprintf(os.Stderr, "gol: %s: no cache; run 'gol refresh' first\n", p.Name)
 			summary.Providers = append(summary.Providers, syncer.ProviderSummary{Provider: p.Name})
 			continue
 		}
@@ -368,10 +368,10 @@ func logProviderSummary(ps syncer.ProviderSummary) {
 			fmt.Printf("%s: updated %s\n", ps.Provider, name)
 		case syncer.ActionSkipped:
 			fmt.Printf("%s: skipped %s (%s)\n", ps.Provider, name, r.Warning)
-			fmt.Fprintf(os.Stderr, "skull2: %s: warning: %s\n", ps.Provider, r.Warning)
+			fmt.Fprintf(os.Stderr, "gol: %s: warning: %s\n", ps.Provider, r.Warning)
 		case syncer.ActionFailed:
 			fmt.Printf("%s: failed %s\n", ps.Provider, name)
-			fmt.Fprintf(os.Stderr, "skull2: %s: %s: %v\n", ps.Provider, name, r.Err)
+			fmt.Fprintf(os.Stderr, "gol: %s: %s: %v\n", ps.Provider, name, r.Err)
 		}
 	}
 	fmt.Printf("%s: %d cloned, %d updated, %d skipped, %d failed\n",
@@ -379,10 +379,10 @@ func logProviderSummary(ps syncer.ProviderSummary) {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintf(w, `skull2 %s - multi-provider git portfolio manager
+	fmt.Fprintf(w, `gol %s - multi-provider git portfolio manager
 
 Usage:
-  skull2 [command]
+  gol [command]
 
 Commands:
   tui              Browse and clone repositories (default)

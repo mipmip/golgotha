@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/mipmip/skull2/internal/provider"
+	"github.com/mipmip/golgotha/internal/provider"
 )
 
 // OwnerState records one owner in the cache's owner index and whether its
@@ -178,17 +178,17 @@ func (c *Cache) OwnerNames() []string {
 	return out
 }
 
-// Dir returns the skull2 cache directory, honoring $XDG_CACHE_HOME and falling
-// back to ~/.cache/skull2.
+// Dir returns the golgotha cache directory, honoring $XDG_CACHE_HOME and falling
+// back to ~/.cache/golgotha.
 func Dir() (string, error) {
 	if xdg := os.Getenv("XDG_CACHE_HOME"); xdg != "" {
-		return filepath.Join(xdg, "skull2"), nil
+		return filepath.Join(xdg, "golgotha"), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("resolving home directory: %w", err)
 	}
-	return filepath.Join(home, ".cache", "skull2"), nil
+	return filepath.Join(home, ".cache", "golgotha"), nil
 }
 
 // Path returns the cache file path for a provider (<dir>/<provider>.json).
