@@ -329,6 +329,18 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "v":
 		m.facets.vis = m.facets.vis.cycle()
 		return m.applyFacetChange()
+
+	case "s":
+		m.sortKey = m.sortKey.cycle()
+		return m.applySortChange()
+
+	case "S":
+		// Reversing direction is meaningless with no active sort.
+		if m.sortKey == sortNone {
+			return m, nil
+		}
+		m.sortDir = m.sortDir.toggle()
+		return m.applySortChange()
 	}
 
 	return m, nil
@@ -342,6 +354,21 @@ func (m *Model) applyFacetChange() (tea.Model, tea.Cmd) {
 	m.offset = 0
 	m.clampCursor()
 	m.status = m.facetStatus()
+	return m, nil
+}
+
+// applySortChange resets the scroll window after a re-sort (same rule as a facet
+// change), keeps the cursor valid against the new row order, and reflects the
+// active sort in the status line.
+func (m *Model) applySortChange() (tea.Model, tea.Cmd) {
+	m.cursor = 0
+	m.offset = 0
+	m.clampCursor()
+	if m.sortKey == sortNone {
+		m.status = "sort: none (fetch order)"
+	} else {
+		m.status = fmt.Sprintf("sort: %s %s", m.sortKey.label(), m.sortDir.label())
+	}
 	return m, nil
 }
 

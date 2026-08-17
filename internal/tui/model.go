@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -23,6 +24,55 @@ import (
 	"github.com/mipmip/skull2/internal/fetch"
 	"github.com/mipmip/skull2/internal/provider"
 )
+
+// sortKey selects the repo-list ordering. The zero value (none) preserves the
+// provider/cache fetch order, so the default behavior is unchanged.
+type sortKey int
+
+const (
+	sortNone    sortKey = iota // provider/cache fetch order (no sort)
+	sortName                   // alphabetical by Repo.Name (case-insensitive)
+	sortUpdated                // by Repo.UpdatedAt
+)
+
+// cycle advances the sort key none -> name -> updated -> none.
+func (k sortKey) cycle() sortKey { return (k + 1) % 3 }
+
+// label renders the sort key for the footer legend.
+func (k sortKey) label() string {
+	switch k {
+	case sortName:
+		return "name"
+	case sortUpdated:
+		return "updated"
+	default:
+		return "none"
+	}
+}
+
+// sortDir is the sort direction. The zero value is ascending.
+type sortDir int
+
+const (
+	sortAsc  sortDir = iota // ascending
+	sortDesc                // descending
+)
+
+// toggle flips the direction asc <-> desc.
+func (d sortDir) toggle() sortDir {
+	if d == sortAsc {
+		return sortDesc
+	}
+	return sortAsc
+}
+
+// label renders the sort direction for the footer legend.
+func (d sortDir) label() string {
+	if d == sortDesc {
+		return "desc"
+	}
+	return "asc"
+}
 
 // level identifies the current navigation depth.
 type level int
@@ -105,6 +155,13 @@ type Model struct {
 	// to the repo list, composed (AND) with the fuzzy query. In-memory for the
 	// session; defaults to all (no constraint).
 	facets facets
+
+	// sortKey / sortDir hold the interactive repo-list sort. Zero values
+	// (none/asc) preserve the provider/cache fetch order, so the default is
+	// unchanged. The sort is applied after filtering, ordering only the visible
+	// subset. In-memory for the session.
+	sortKey sortKey
+	sortDir sortDir
 
 	// status is a one-line status/progress message shown in the footer.
 	status string
@@ -413,16 +470,48 @@ func (m *Model) visibleRepos() []repoItem {
 		scope = narrowed
 	}
 
-	if query == "" {
-		return scope
-	}
-	out := scope[:0:0]
-	for _, it := range scope {
-		if fuzzyMatch(it.key(), query) {
-			out = append(out, it)
+	if query != "" {
+		out := scope[:0:0]
+		for _, it := range scope {
+			if fuzzyMatch(it.key(), query) {
+				out = append(out, it)
+			}
 		}
+		scope = out
 	}
-	return out
+
+	// Sort last so it orders exactly the visible (filtered) subset, at every
+	// scope. sortNone leaves the slice in fetch order.
+	return m.sortRepos(scope)
+}
+
+// sortRepos returns items ordered by the active sort key and direction. It is
+// stable (fetch order is the tiebreaker) so equal keys don't jump around. When
+// sortKey is sortNone the slice is returned unchanged (fetch order).
+func (m *Model) sortRepos(items []repoItem) []repoItem {
+	if m.sortKey == sortNone {
+		return items
+	}
+	// Sort a copy: the scope slice may alias the cached fetch-order slice
+	// (provider-level scope returns it directly), and sorting in place would
+	// destroy the fetch order that sortNone must be able to restore.
+	sorted := make([]repoItem, len(items))
+	copy(sorted, items)
+	items = sorted
+	sort.SliceStable(items, func(i, j int) bool {
+		var less bool
+		switch m.sortKey {
+		case sortName:
+			less = strings.ToLower(items[i].Repo.Name) < strings.ToLower(items[j].Repo.Name)
+		case sortUpdated:
+			less = items[i].Repo.UpdatedAt.Before(items[j].Repo.UpdatedAt)
+		}
+		if m.sortDir == sortDesc {
+			return !less
+		}
+		return less
+	})
+	return items
 }
 
 // rowCount returns the number of rows shown at the current level.

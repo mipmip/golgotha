@@ -1,11 +1,11 @@
 ---
 # skull2-p22b
 title: sorting on alphabet/last-updated
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-08-17T18:15:32Z
-updated_at: 2026-08-17T19:34:42Z
+updated_at: 2026-08-17T20:37:35Z
 parent: skull2-qati
 ---
 

@@ -317,7 +317,11 @@ func (m *Model) footerText() string {
 	if m.filtering {
 		return "enter: apply  esc: cancel filter"
 	}
+	sortHelp := "s: sort  S: reverse"
+	if m.sortKey != sortNone {
+		sortHelp = fmt.Sprintf("s: sort [%s %s]  S: reverse", m.sortKey.label(), m.sortDir.label())
+	}
 	return "up/down: move  pgup/pgdn ^u/^d: page  home/end: ends  " +
-		"enter: drill/details  /: filter  f/a/v: fork/archived/vis  space: select  " +
+		"enter: drill/details  /: filter  f/a/v: fork/archived/vis  " + sortHelp + "  space: select  " +
 		"c: clone  o: open  r: refresh  esc: back  q: quit"
 }
