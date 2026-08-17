@@ -1,11 +1,11 @@
 ---
 # skull2-vle5
 title: more filters
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-08-17T18:13:11Z
-updated_at: 2026-08-17T19:00:47Z
+updated_at: 2026-08-17T20:16:15Z
 parent: skull2-qati
 ---
 

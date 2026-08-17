@@ -29,8 +29,39 @@ type Repo struct {
 	Archived bool
 	// Fork reports whether the repository is a fork.
 	Fork bool
+	// Visibility is the repository visibility: "public", "private" or
+	// "internal". Unknown/empty values normalize to "public".
+	Visibility string
 	// UpdatedAt is the last update timestamp.
 	UpdatedAt time.Time
+}
+
+// Repository visibility values used by Repo.Visibility.
+const (
+	VisibilityPublic   = "public"
+	VisibilityPrivate  = "private"
+	VisibilityInternal = "internal"
+)
+
+// NormalizeVisibility maps a raw provider visibility string to one of the
+// recognized values. Anything unrecognized (including empty) normalizes to
+// "public".
+func NormalizeVisibility(v string) string {
+	switch v {
+	case VisibilityPublic, VisibilityPrivate, VisibilityInternal:
+		return v
+	default:
+		return VisibilityPublic
+	}
+}
+
+// visibilityFromPrivate maps a boolean "private" flag (GitHub, Gitea/Codeberg)
+// to the visibility string.
+func visibilityFromPrivate(private bool) string {
+	if private {
+		return VisibilityPrivate
+	}
+	return VisibilityPublic
 }
 
 // Provider lists repositories for a set of owners.

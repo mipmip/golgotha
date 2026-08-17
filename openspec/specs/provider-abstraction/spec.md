@@ -66,3 +66,18 @@ The system SHALL construct the correct provider client from a provider's
 - **WHEN** building a provider of an unknown type
 - **THEN** the system returns an error identifying the type
 
+### Requirement: Repository visibility field
+
+The `Repo` model SHALL include a `Visibility` string describing whether a
+repository is public, private, or internal.
+
+#### Scenario: Visibility is represented
+
+- **WHEN** a repository is modeled
+- **THEN** it carries a `Visibility` of `public`, `private`, or `internal`
+
+#### Scenario: Unknown visibility normalizes
+
+- **WHEN** a provider does not supply a recognizable visibility
+- **THEN** it normalizes to `public`
+

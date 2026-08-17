@@ -39,6 +39,7 @@ type glProject struct {
 	WebURL         string    `json:"web_url"`
 	DefaultBranch  string    `json:"default_branch"`
 	Archived       bool      `json:"archived"`
+	Visibility     string    `json:"visibility"`
 	LastActivityAt time.Time `json:"last_activity_at"`
 	Namespace      struct {
 		FullPath string `json:"full_path"`
@@ -139,6 +140,7 @@ func (g *GitLab) FetchOwner(ctx context.Context, emit fetch.Emit, owner string) 
 				DefaultBranch: p.DefaultBranch,
 				Archived:      p.Archived,
 				Fork:          p.ForkedFromProject != nil,
+				Visibility:    NormalizeVisibility(p.Visibility),
 				UpdatedAt:     p.LastActivityAt,
 			})
 		}

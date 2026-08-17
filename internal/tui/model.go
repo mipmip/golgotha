@@ -99,6 +99,11 @@ type Model struct {
 	filtering bool
 	filter    textinput.Model
 
+	// facets holds the interactive tri-state/value-cycle facet filters applied
+	// to the repo list, composed (AND) with the fuzzy query. In-memory for the
+	// session; defaults to all (no constraint).
+	facets facets
+
 	// status is a one-line status/progress message shown in the footer.
 	status string
 
@@ -364,6 +369,18 @@ func (m *Model) visibleRepos() []repoItem {
 		for _, p := range m.providers {
 			scope = append(scope, m.reposByProvider[p.Name]...)
 		}
+	}
+
+	// Apply the facets first (AND together), then the fuzzy query narrows the
+	// result further. Facets are independent of the fuzzy input.
+	if m.facets.active() {
+		narrowed := scope[:0:0]
+		for _, it := range scope {
+			if m.facets.match(it.Repo) {
+				narrowed = append(narrowed, it)
+			}
+		}
+		scope = narrowed
 	}
 
 	if query == "" {

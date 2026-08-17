@@ -269,9 +269,85 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "r":
 		return m.refresh()
+
+	case "f":
+		m.facets.fork = m.facets.fork.cycle()
+		return m.applyFacetChange()
+
+	case "a":
+		m.facets.archived = m.facets.archived.cycle()
+		return m.applyFacetChange()
+
+	case "v":
+		m.facets.vis = m.facets.vis.cycle()
+		return m.applyFacetChange()
 	}
 
 	return m, nil
+}
+
+// applyFacetChange resets the scroll window after a facet toggles the filter set
+// (same rule as a fuzzy keystroke) and refreshes the status line, adding a hint
+// when the active facets can't match because the data was excluded at fetch.
+func (m *Model) applyFacetChange() (tea.Model, tea.Cmd) {
+	m.cursor = 0
+	m.offset = 0
+	m.clampCursor()
+	m.status = m.facetStatus()
+	return m, nil
+}
+
+// facetStatus renders the status line for the current facet state, appending a
+// hint when a facet was set to reveal data that config excluded before caching
+// (Model A can only narrow what is cached).
+func (m *Model) facetStatus() string {
+	s := m.facets.status()
+	if hint := m.facetHint(); hint != "" {
+		if s != "" {
+			s += "  "
+		}
+		s += hint
+	}
+	return s
+}
+
+// facetHint returns a hint when a facet selection asks for data that was
+// excluded at fetch time (archived/forks not cached because config disabled
+// include_archived/include_forks), or "" when no hint applies.
+func (m *Model) facetHint() string {
+	p := m.selProvider
+	if m.facets.archived == triOnly && !cacheIncludesArchived(p) {
+		return "archived repos are not cached (include_archived: false)"
+	}
+	if m.facets.fork == triOnly && !cacheIncludesForks(p) {
+		return "forks are not cached (include_forks: false)"
+	}
+	return ""
+}
+
+// cacheIncludesArchived reports whether archived repos are part of the cache
+// superset for the provider (config include_archived, default false). A nil
+// provider (top-level scope) is treated as not-excluded so no spurious hint.
+func cacheIncludesArchived(p *config.Provider) bool {
+	if p == nil {
+		return true
+	}
+	if p.IncludeArchived != nil {
+		return *p.IncludeArchived
+	}
+	return false // documented default: archived excluded.
+}
+
+// cacheIncludesForks reports whether forks are part of the cache superset for
+// the provider (config include_forks, default true).
+func cacheIncludesForks(p *config.Provider) bool {
+	if p == nil {
+		return true
+	}
+	if p.IncludeForks != nil {
+		return *p.IncludeForks
+	}
+	return true // documented default: forks included.
 }
 
 // goBack pops the navigation stack, or clears an active filter first.

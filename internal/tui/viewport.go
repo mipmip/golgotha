@@ -73,6 +73,9 @@ func (m *Model) chrome() int {
 	if m.filtering || m.filter.Value() != "" {
 		c++ // filter input line
 	}
+	if m.facets.status() != "" {
+		c++ // facet-status line
+	}
 	if m.status != "" {
 		c++ // status line
 	}

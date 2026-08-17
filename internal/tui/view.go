@@ -34,6 +34,10 @@ func (m *Model) View() string {
 		b.WriteString(m.filter.View())
 		b.WriteString("\n")
 	}
+	if fs := m.facets.status(); fs != "" {
+		b.WriteString(dimStyle.Render("filters: " + fs))
+		b.WriteString("\n")
+	}
 	if m.status != "" {
 		b.WriteString(dimStyle.Render(m.status))
 		b.WriteString("\n")
@@ -138,6 +142,9 @@ func (m *Model) renderRepos(rows []repoItem) string {
 	n := len(rows)
 	if n == 0 {
 		m.indicatorText = ""
+		if hint := m.facetHint(); hint != "" {
+			return dimStyle.Render("(no repositories) — " + hint)
+		}
 		return dimStyle.Render("(no repositories)")
 	}
 	first, last := m.applyWindow(n)
@@ -181,6 +188,6 @@ func (m *Model) footerText() string {
 		return "enter: apply  esc: cancel filter"
 	}
 	return "up/down: move  pgup/pgdn ^u/^d: page  home/end: ends  " +
-		"enter: drill/clone  /: filter  space: select  " +
+		"enter: drill/clone  /: filter  f/a/v: fork/archived/vis  space: select  " +
 		"c: clone  o: open  r: refresh  esc: back  q: quit"
 }

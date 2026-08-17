@@ -46,5 +46,10 @@ providers:
     # exclude_owners:
     #   - noisy-org
     #   - self
+    # include_archived / include_forks control the cache SUPERSET: they decide
+    # which repos are fetched and cached. The TUI's interactive facet filters
+    # (f: fork, a: archived, v: visibility) only NARROW what is already cached —
+    # they can hide cached repos but never reveal repos excluded here. Set these
+    # to true if you want to be able to browse archived repos / forks in the TUI.
     include_archived: false      # default false
     include_forks: true          # default true

@@ -43,6 +43,7 @@ type ghRepo struct {
 	DefaultBranch string    `json:"default_branch"`
 	Archived      bool      `json:"archived"`
 	Fork          bool      `json:"fork"`
+	Private       bool      `json:"private"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
@@ -130,6 +131,7 @@ func (g *GitHub) FetchOwner(ctx context.Context, emit fetch.Emit, owner string) 
 				DefaultBranch: r.DefaultBranch,
 				Archived:      r.Archived,
 				Fork:          r.Fork,
+				Visibility:    visibilityFromPrivate(r.Private),
 				UpdatedAt:     r.UpdatedAt,
 			})
 		}
