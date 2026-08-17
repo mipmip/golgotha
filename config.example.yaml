@@ -1,0 +1,34 @@
+# Skull2 sample configuration.
+#
+# Copy to ~/.config/skull2/config.yaml (or $XDG_CONFIG_HOME/skull2/config.yaml)
+# and adjust. Validate with: skull2 config check
+#
+# Unknown keys are rejected (strict decoding), so stick to the keys below.
+
+# Root under which all clones are created. `~` expands to your home dir.
+base_dir: ~
+
+# Default clone-path template (Go text/template). Per-provider override allowed.
+# Fields: .BaseDir .Provider .Type .Short .Host .Owner .OwnerLower .Repo .RepoLower
+clone_pattern_tpl: "{{.BaseDir}}/{{.Short}}.{{.OwnerLower}}/{{.Repo}}"
+
+providers:
+  # Personal GitHub account (mipmip).
+  - name: github-mipmip
+    type: github
+    short: gh
+    web_url: https://github.com
+    # api_url defaults to https://api.github.com (override for GitHub Enterprise).
+    clone_protocol: ssh          # ssh | https
+    auth:
+      cli: gh                    # reuse the `gh` CLI token when available
+      env: SKULL2_GITHUB_TOKEN   # PAT fallback for headless/cron use
+    # NOTE: leave `owners` unset to list YOUR OWN repositories
+    # (the authenticated user). Only list `owners` for organizations —
+    # each entry is fetched via /orgs/<owner>/repos, which does not work
+    # for a personal user account.
+    #
+    # owners:
+    #   - TechNative-B-V
+    include_archived: false      # default false
+    include_forks: true          # default true
