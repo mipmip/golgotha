@@ -29,6 +29,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = fmt.Sprintf("clone failed %s: %v", msg.Key, msg.Err)
 		} else {
 			m.markCloned(msg.Provider, msg.Key)
+			// Keep the open detail view's cloned flag in sync.
+			if m.detailRepo.Provider != nil &&
+				m.detailRepo.Provider.Name == msg.Provider &&
+				m.detailRepo.key() == msg.Key {
+				m.detailRepo.Cloned = true
+			}
 			m.status = fmt.Sprintf("cloned %s", msg.Key)
 		}
 		return m, nil
@@ -89,6 +95,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.status = fmt.Sprintf("fetched %s: %d repos", ownerLabel(msg.Owner), len(msg.Repos))
 		return m, nil
 
+	case detailLoadedMsg:
+		return m.handleDetailLoaded(msg)
+
 	case progressMsg:
 		return m.handleProgress(msg)
 
@@ -102,6 +111,39 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
+	return m, nil
+}
+
+// handleDetailLoaded folds a resolved repository detail into the model. A stale
+// message (for a repo other than the one currently open) is ignored. On error
+// with no cache the view degrades gracefully (metadata + "README unavailable").
+func (m *Model) handleDetailLoaded(msg detailLoadedMsg) (tea.Model, tea.Cmd) {
+	// Ignore results for a repo the user already navigated away from.
+	if m.nav != levelDetail ||
+		m.detailRepo.Provider == nil ||
+		m.detailRepo.Provider.Name != msg.Provider ||
+		m.detailRepo.Repo.Owner != msg.Owner ||
+		m.detailRepo.Repo.Name != msg.Name {
+		return m, nil
+	}
+
+	m.detailLoading = false
+	if msg.Err != nil {
+		// Graceful offline: no cache and the fetch failed.
+		m.detailUnavailable = true
+		m.detailLoaded = false
+		m.status = "README unavailable"
+		return m, nil
+	}
+	m.detail = msg.Details
+	m.detailLoaded = true
+	m.detailUnavailable = false
+	m.readmeRenderedWidth = -1 // force re-render on next View
+	if msg.Cached {
+		m.status = fmt.Sprintf("%s (cached)", m.detailRepo.key())
+	} else {
+		m.status = fmt.Sprintf("loaded %s", m.detailRepo.key())
+	}
 	return m, nil
 }
 
@@ -206,6 +248,12 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cursor = 0
 		m.offset = 0
 		return m, cmd
+	}
+
+	// The detail view has its own key map (scroll the README, clone, open,
+	// refresh, back). Handle it before the list-navigation key map.
+	if m.nav == levelDetail {
+		return m.handleDetailKey(msg)
 	}
 
 	switch msg.String() {
@@ -379,11 +427,13 @@ func (m *Model) goBack() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// enter drills into the highlighted row, or clones when already at repos.
+// enter drills into the highlighted row, opening the detail view at the repo
+// level. Enter now consistently means "drill deeper"; cloning is on `c`.
 func (m *Model) enter() (tea.Model, tea.Cmd) {
-	// With an active filter we operate on the flattened repo view directly.
+	// With an active filter we operate on the flattened repo view directly:
+	// Enter opens the highlighted repo's detail view.
 	if m.filter.Value() != "" {
-		return m.clone()
+		return m.openDetail()
 	}
 	switch m.nav {
 	case levelProviders:
@@ -405,9 +455,129 @@ func (m *Model) enter() (tea.Model, tea.Cmd) {
 			return m, m.maybeFetchOwner(m.selProvider, m.selOwner)
 		}
 	case levelRepos:
-		return m.clone()
+		return m.openDetail()
 	}
 	return m, nil
+}
+
+// openDetail opens the detail view for the highlighted repository. It restores
+// tier-2 metadata + README from the detail cache when present (instant, no
+// network) and otherwise starts a lazy fetch showing a loading indicator.
+func (m *Model) openDetail() (tea.Model, tea.Cmd) {
+	it, ok := m.currentRepo()
+	if !ok {
+		return m, nil
+	}
+
+	// Remember the repo-list position so Esc restores it.
+	m.detailReturnCursor = m.cursor
+	m.detailReturnOffset = m.offset
+
+	m.detailRepo = it
+	m.nav = levelDetail
+	m.detail = cache.Details{}
+	m.detailLoaded = false
+	m.detailUnavailable = false
+	m.detailLoading = false
+	m.readmeRenderedWidth = -1
+	m.readme.GotoTop()
+
+	// Reuse the cached detail if present (no network).
+	if d, cok, err := cache.LoadDetailsOrEmpty(it.Provider.Name, it.Repo.Owner, it.Repo.Name); err == nil && cok {
+		m.detail = d
+		m.detailLoaded = true
+		m.status = fmt.Sprintf("%s (cached)", it.key())
+		return m, nil
+	}
+
+	// Lazy fetch on first open.
+	if m.detailFetcher == nil {
+		return m, nil
+	}
+	m.detailLoading = true
+	m.status = fmt.Sprintf("loading %s...", it.key())
+	return m, m.detailFetcher(context.Background(), it.Provider, it.Repo)
+}
+
+// closeDetail returns from the detail view to the repo list at the prior
+// position, clearing detail state.
+func (m *Model) closeDetail() {
+	m.nav = levelRepos
+	m.cursor = m.detailReturnCursor
+	m.offset = m.detailReturnOffset
+	m.detailRepo = repoItem{}
+	m.detail = cache.Details{}
+	m.detailLoaded = false
+	m.detailUnavailable = false
+	m.detailLoading = false
+	m.clampCursor()
+}
+
+// handleDetailKey processes keys while the detail view is open: Esc backs out,
+// `c` clones, `o` opens in the browser, `r` re-fetches; movement/paging keys
+// scroll the README viewport.
+func (m *Model) handleDetailKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "ctrl+c":
+		m.quitting = true
+		return m, tea.Quit
+
+	case "esc", "backspace":
+		m.closeDetail()
+		return m, nil
+
+	case "c":
+		return m.cloneDetail()
+
+	case "o":
+		return m.openDetailRepo()
+
+	case "r":
+		return m.refreshDetail()
+	}
+
+	// Everything else scrolls the README viewport (up/down/pgup/pgdn/home/end...).
+	var cmd tea.Cmd
+	m.readme, cmd = m.readme.Update(msg)
+	return m, cmd
+}
+
+// cloneDetail clones the repo whose detail view is open.
+func (m *Model) cloneDetail() (tea.Model, tea.Cmd) {
+	it := m.detailRepo
+	if it.Provider == nil {
+		return m, nil
+	}
+	if it.Cloned {
+		m.status = fmt.Sprintf("%s already cloned", it.key())
+		return m, nil
+	}
+	m.status = fmt.Sprintf("cloning %s...", it.key())
+	return m, cloneCmd(m.cloner, it.Provider, it.Repo)
+}
+
+// openDetailRepo opens the detail-view repo's web URL in the browser.
+func (m *Model) openDetailRepo() (tea.Model, tea.Cmd) {
+	it := m.detailRepo
+	if it.Repo.WebURL == "" {
+		m.status = fmt.Sprintf("%s has no web URL", it.key())
+		return m, nil
+	}
+	m.status = fmt.Sprintf("opening %s", it.Repo.WebURL)
+	return m, openCmd(it.Repo.WebURL)
+}
+
+// refreshDetail re-fetches the open repo's details and README, bypassing the
+// cache. It is a no-op when the fetch seam is disabled (tests).
+func (m *Model) refreshDetail() (tea.Model, tea.Cmd) {
+	it := m.detailRepo
+	if it.Provider == nil || m.detailFetcher == nil {
+		return m, nil
+	}
+	m.detailLoading = true
+	m.detailUnavailable = false
+	m.status = fmt.Sprintf("re-fetching %s...", it.key())
+	return m, m.detailFetcher(context.Background(), it.Provider, it.Repo)
 }
 
 // toggleSelect flips the multi-select flag on the highlighted repo.

@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -192,6 +193,96 @@ func (g *GitHub) ListOwners(ctx context.Context) ([]string, error) {
 		next = nextLink(resp.Header.Get("Link"))
 	}
 	return out, nil
+}
+
+// ghDetail mirrors the subset of the GitHub repository JSON consumed for tier-2
+// details. Topics require the mercy preview / topics array on the repo object,
+// which the modern API returns by default.
+type ghDetail struct {
+	StargazersCount int      `json:"stargazers_count"`
+	Language        string   `json:"language"`
+	Topics          []string `json:"topics"`
+}
+
+// ghReadme mirrors the GitHub contents/readme response: base64-encoded content.
+type ghReadme struct {
+	Content  string `json:"content"`
+	Encoding string `json:"encoding"`
+}
+
+// get performs an authenticated GET against the GitHub API and returns the body
+// and status code. It is shared by the detail/README fetchers.
+func (g *GitHub) get(ctx context.Context, path string) ([]byte, int, error) {
+	token, err := ResolveToken(&g.cfg, g.getter, g.env)
+	if err != nil {
+		return nil, 0, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, g.base+path, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+
+	resp, err := g.client.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	body, err := readAllAndClose(resp)
+	if err != nil {
+		return nil, resp.StatusCode, err
+	}
+	return body, resp.StatusCode, nil
+}
+
+// RepoDetails fetches stars, topics and primary language for a GitHub repo via
+// GET /repos/{owner}/{name}.
+func (g *GitHub) RepoDetails(ctx context.Context, owner, name string) (Details, error) {
+	path := fmt.Sprintf("/repos/%s/%s", url.PathEscape(owner), url.PathEscape(name))
+	body, status, err := g.get(ctx, path)
+	if err != nil {
+		return Details{}, err
+	}
+	if status != http.StatusOK {
+		return Details{}, fmt.Errorf("github: %s: %s: %s", path, http.StatusText(status), strings.TrimSpace(string(body)))
+	}
+	var d ghDetail
+	if err := json.Unmarshal(body, &d); err != nil {
+		return Details{}, fmt.Errorf("github: decoding details: %w", err)
+	}
+	return Details{Stars: d.StargazersCount, Topics: d.Topics, Language: d.Language}, nil
+}
+
+// Readme fetches the raw README markdown via GET /repos/{owner}/{name}/readme,
+// which returns the default README (base64-encoded). A 404 (no README) yields an
+// empty string and nil error.
+func (g *GitHub) Readme(ctx context.Context, owner, name string) (string, error) {
+	path := fmt.Sprintf("/repos/%s/%s/readme", url.PathEscape(owner), url.PathEscape(name))
+	body, status, err := g.get(ctx, path)
+	if err != nil {
+		return "", err
+	}
+	if status == http.StatusNotFound {
+		return "", nil
+	}
+	if status != http.StatusOK {
+		return "", fmt.Errorf("github: %s: %s: %s", path, http.StatusText(status), strings.TrimSpace(string(body)))
+	}
+	var r ghReadme
+	if err := json.Unmarshal(body, &r); err != nil {
+		return "", fmt.Errorf("github: decoding readme: %w", err)
+	}
+	if strings.EqualFold(r.Encoding, "base64") {
+		// GitHub wraps base64 content at 60 cols with newlines.
+		clean := strings.ReplaceAll(r.Content, "\n", "")
+		decoded, derr := base64.StdEncoding.DecodeString(clean)
+		if derr != nil {
+			return "", fmt.Errorf("github: decoding readme content: %w", derr)
+		}
+		return string(decoded), nil
+	}
+	return r.Content, nil
 }
 
 // nextLink extracts the rel="next" URL from an RFC 5988 Link header, or "".

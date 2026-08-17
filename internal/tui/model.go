@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/mipmip/skull2/internal/cache"
@@ -30,6 +31,7 @@ const (
 	levelProviders level = iota // list of configured providers
 	levelOwners                 // owners within the selected provider
 	levelRepos                  // repos within the selected owner
+	levelDetail                 // single-repo detail view (metadata + README)
 )
 
 // repoItem is a repository plus its resolved display/clone state.
@@ -136,6 +138,32 @@ type Model struct {
 	// fetchCancel cancels the in-flight streaming fetch; nil when none.
 	fetchCancel context.CancelFunc
 
+	// --- Detail view (levelDetail) state ---
+	// detailRepo is the repo whose detail view is open (tier-1 metadata source).
+	detailRepo repoItem
+	// detailReturnCursor / detailReturnOffset restore the repo-list position when
+	// Esc backs out of the detail view.
+	detailReturnCursor int
+	detailReturnOffset int
+	// detailLoading reports that a detail fetch is in flight (loading indicator).
+	detailLoading bool
+	// detailLoaded reports whether details (tier-2 + README) are available for the
+	// open repo (from cache or a completed fetch).
+	detailLoaded bool
+	// detail holds the loaded tier-2 metadata + raw README for the open repo.
+	detail cache.Details
+	// detailUnavailable reports that the fetch failed with no cache, so the view
+	// shows metadata plus a "README unavailable" note (graceful offline).
+	detailUnavailable bool
+	// readme is the scrollable rendered-README viewport.
+	readme viewport.Model
+	// readmeRendered caches the rendered README for the width it was rendered at,
+	// so View only re-renders on a width change.
+	readmeRenderedWidth int
+	// detailFetcher lazily fetches one repo's details+README and caches them,
+	// returning a detailLoadedMsg; nil disables lazy fetch (tests inject the msg).
+	detailFetcher func(ctx context.Context, p *config.Provider, r provider.Repo) tea.Cmd
+
 	// checkCloned reports whether target already exists as a git repo. A var so
 	// tests can stub the filesystem check.
 	checkCloned func(target string) bool
@@ -169,11 +197,13 @@ func New(cfg *config.Config) *Model {
 	m.spinner = spinner.New()
 	m.spinner.Spinner = spinner.Dot
 	m.progress = progress.New(progress.WithoutPercentage())
+	m.readme = viewport.New(0, 0)
 
 	m.cloner = newEngineCloner(cfg)
 	m.refresher = defaultRefresher(cfg, m)
 	m.ownerFetcher = defaultOwnerFetcher(cfg)
 	m.progressFetcher = defaultProgressFetcher(cfg)
+	m.detailFetcher = defaultDetailFetcher(cfg)
 
 	m.loadCaches()
 	return m

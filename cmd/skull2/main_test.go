@@ -169,6 +169,14 @@ func (f *fakeDiscoverClient) ListRepos(_ context.Context, owners []string) ([]pr
 	return []provider.Repo{{Owner: owner, Name: owner + "-repo"}}, nil
 }
 
+func (f *fakeDiscoverClient) RepoDetails(_ context.Context, _, _ string) (provider.Details, error) {
+	return provider.Details{}, nil
+}
+
+func (f *fakeDiscoverClient) Readme(_ context.Context, _, _ string) (string, error) {
+	return "", nil
+}
+
 func TestRefreshAllOwnersEagerSweep(t *testing.T) {
 	cacheHome := t.TempDir()
 	t.Setenv("XDG_CACHE_HOME", cacheHome)

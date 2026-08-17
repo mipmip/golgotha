@@ -167,6 +167,90 @@ func codebergTotalPages(totalCount string) int {
 	return pages
 }
 
+// giteaDetail mirrors the subset of the Gitea repository JSON consumed for
+// tier-2 details.
+type giteaDetail struct {
+	StarsCount int    `json:"stars_count"`
+	Language   string `json:"language"`
+}
+
+// giteaTopics mirrors the /topics response.
+type giteaTopics struct {
+	Topics []string `json:"topics"`
+}
+
+// get performs an authenticated GET against the Gitea/Forgejo API, returning the
+// body and status code.
+func (c *Codeberg) get(ctx context.Context, path string) ([]byte, int, error) {
+	token, err := ResolveToken(&c.cfg, c.getter, c.env)
+	if err != nil {
+		return nil, 0, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.base+path, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	req.Header.Set("Authorization", "token "+token)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	body, err := readAllAndClose(resp)
+	if err != nil {
+		return nil, resp.StatusCode, err
+	}
+	return body, resp.StatusCode, nil
+}
+
+// RepoDetails fetches stars and primary language via GET
+// /api/v1/repos/{owner}/{name} and topics via the /topics endpoint. A failure to
+// fetch topics is not fatal (the repo may have none); the base details still
+// return.
+func (c *Codeberg) RepoDetails(ctx context.Context, owner, name string) (Details, error) {
+	repoPath := fmt.Sprintf("/api/v1/repos/%s/%s", url.PathEscape(owner), url.PathEscape(name))
+	body, status, err := c.get(ctx, repoPath)
+	if err != nil {
+		return Details{}, err
+	}
+	if status != http.StatusOK {
+		return Details{}, fmt.Errorf("codeberg: %s: %s: %s", repoPath, http.StatusText(status), strings.TrimSpace(string(body)))
+	}
+	var d giteaDetail
+	if err := json.Unmarshal(body, &d); err != nil {
+		return Details{}, fmt.Errorf("codeberg: decoding details: %w", err)
+	}
+	det := Details{Stars: d.StarsCount, Language: d.Language}
+
+	topicsPath := repoPath + "/topics"
+	if tb, tstatus, terr := c.get(ctx, topicsPath); terr == nil && tstatus == http.StatusOK {
+		var t giteaTopics
+		if json.Unmarshal(tb, &t) == nil {
+			det.Topics = t.Topics
+		}
+	}
+	return det, nil
+}
+
+// Readme fetches the raw README markdown via the raw endpoint. Gitea has no
+// dedicated README endpoint, so it reads the default branch's README.md. A
+// not-found (no README) yields an empty string and nil error.
+func (c *Codeberg) Readme(ctx context.Context, owner, name string) (string, error) {
+	path := fmt.Sprintf("/api/v1/repos/%s/%s/raw/README.md", url.PathEscape(owner), url.PathEscape(name))
+	body, status, err := c.get(ctx, path)
+	if err != nil {
+		return "", err
+	}
+	if status == http.StatusNotFound {
+		return "", nil
+	}
+	if status != http.StatusOK {
+		return "", fmt.Errorf("codeberg: %s: %s: %s", path, http.StatusText(status), strings.TrimSpace(string(body)))
+	}
+	return string(body), nil
+}
+
 // ListOwners discovers the authenticated user's organizations via
 // /api/v1/user/orgs, paginating until a short page. It returns org usernames.
 func (c *Codeberg) ListOwners(ctx context.Context) ([]string, error) {

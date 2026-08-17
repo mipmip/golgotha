@@ -14,9 +14,11 @@ func boolPtr(b bool) *bool { return &b }
 
 // fakeProvider is a hermetic Provider used in tests.
 type fakeProvider struct {
-	repos  []Repo
-	owners []string
-	err    error
+	repos   []Repo
+	owners  []string
+	details Details
+	readme  string
+	err     error
 }
 
 func (f *fakeProvider) ListRepos(_ context.Context, _ []string) ([]Repo, error) {
@@ -31,6 +33,20 @@ func (f *fakeProvider) ListOwners(_ context.Context) ([]string, error) {
 		return nil, f.err
 	}
 	return f.owners, nil
+}
+
+func (f *fakeProvider) RepoDetails(_ context.Context, _, _ string) (Details, error) {
+	if f.err != nil {
+		return Details{}, f.err
+	}
+	return f.details, nil
+}
+
+func (f *fakeProvider) Readme(_ context.Context, _, _ string) (string, error) {
+	if f.err != nil {
+		return "", f.err
+	}
+	return f.readme, nil
 }
 
 func TestProviderInterfaceListRepos(t *testing.T) {

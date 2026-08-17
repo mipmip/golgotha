@@ -51,6 +51,20 @@ type ownerFetchedMsg struct {
 	Err      error
 }
 
+// detailLoadedMsg is emitted after a repository's detail (tier-2 metadata +
+// README) has been resolved — either loaded from the detail cache or freshly
+// fetched. Cached reports whether it came from the cache (no network). When
+// Err != nil and no cache existed, the model degrades gracefully (metadata plus
+// a "README unavailable" note).
+type detailLoadedMsg struct {
+	Provider string
+	Owner    string
+	Name     string
+	Details  cache.Details
+	Cached   bool
+	Err      error
+}
+
 // progressMsg carries one fetch progress event plus the channel it came from so
 // the model can re-issue a wait for the next event, keeping Update pure.
 type progressMsg struct {
@@ -238,6 +252,62 @@ func defaultOwnerFetcher(cfg *config.Config) func(ctx context.Context, p *config
 			return ownerFetchedMsg{Provider: p.Name, Owner: owner, Repos: repos}
 		}
 	}
+}
+
+// defaultDetailFetcher returns a fetcher that resolves a repository's detail
+// (tier-2 metadata + README). It fetches from the provider and writes the
+// separate per-repo detail cache, returning a detailLoadedMsg. On a fetch error
+// it falls back to any existing detail cache; if none exists the message carries
+// the error so the model degrades gracefully. It is never exercised in unit
+// tests (no network); tests set m.detailFetcher to nil or feed detailLoadedMsg.
+func defaultDetailFetcher(cfg *config.Config) func(ctx context.Context, p *config.Provider, r provider.Repo) tea.Cmd {
+	reg := provider.NewDefaultRegistry()
+	return func(ctx context.Context, p *config.Provider, r provider.Repo) tea.Cmd {
+		return func() tea.Msg {
+			msg := detailLoadedMsg{Provider: p.Name, Owner: r.Owner, Name: r.Name}
+
+			client, err := reg.Build(p)
+			if err != nil {
+				return detailFallback(msg, err)
+			}
+			pd, derr := client.RepoDetails(ctx, r.Owner, r.Name)
+			if derr != nil {
+				return detailFallback(msg, derr)
+			}
+			readme, rerr := client.Readme(ctx, r.Owner, r.Name)
+			if rerr != nil {
+				return detailFallback(msg, rerr)
+			}
+
+			d, serr := cache.RefreshDetails(p.Name, r.Owner, r.Name, pd, readme, nowUTC())
+			if serr != nil {
+				// Details fetched fine but caching failed; still show them.
+				msg.Details = cache.Details{
+					FetchedAt:      nowUTC(),
+					Stars:          pd.Stars,
+					Topics:         pd.Topics,
+					Language:       pd.Language,
+					ReadmeMarkdown: readme,
+				}
+				return msg
+			}
+			msg.Details = d
+			return msg
+		}
+	}
+}
+
+// detailFallback turns a fetch error into a detailLoadedMsg: it uses an existing
+// detail cache when present (Cached=true, no error), otherwise carries the error
+// so the model shows the graceful-offline note.
+func detailFallback(msg detailLoadedMsg, fetchErr error) tea.Msg {
+	if d, ok, lerr := cache.LoadDetailsOrEmpty(msg.Provider, msg.Owner, msg.Name); lerr == nil && ok {
+		msg.Details = d
+		msg.Cached = true
+		return msg
+	}
+	msg.Err = fetchErr
+	return msg
 }
 
 // nowUTC returns the current UTC time (indirected for readability/testability).

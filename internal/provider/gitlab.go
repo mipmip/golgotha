@@ -160,6 +160,121 @@ func (g *GitLab) FetchOwner(ctx context.Context, emit fetch.Emit, owner string) 
 	return FilterRepos(&g.cfg, repos), nil
 }
 
+// glDetail mirrors the subset of the GitLab project JSON consumed for tier-2
+// details.
+type glDetail struct {
+	StarCount     int      `json:"star_count"`
+	Topics        []string `json:"topics"`
+	DefaultBranch string   `json:"default_branch"`
+}
+
+// get performs an authenticated GET against the GitLab API, returning the body
+// and status code.
+func (g *GitLab) get(ctx context.Context, path string) ([]byte, int, error) {
+	token, err := ResolveToken(&g.cfg, g.getter, g.env)
+	if err != nil {
+		return nil, 0, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, g.base+path, nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	req.Header.Set("PRIVATE-TOKEN", token)
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := g.client.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	body, err := readAllAndClose(resp)
+	if err != nil {
+		return nil, resp.StatusCode, err
+	}
+	return body, resp.StatusCode, nil
+}
+
+// projectID returns the URL-encoded "owner/name" project identifier the GitLab
+// API accepts in place of a numeric ID.
+func projectID(owner, name string) string {
+	return url.PathEscape(owner + "/" + name)
+}
+
+// RepoDetails fetches star_count and topics via GET /projects/{id} and the
+// primary language via GET /projects/{id}/languages (the highest-percentage
+// entry). A languages fetch failure is not fatal.
+func (g *GitLab) RepoDetails(ctx context.Context, owner, name string) (Details, error) {
+	id := projectID(owner, name)
+	path := "/projects/" + id
+	body, status, err := g.get(ctx, path)
+	if err != nil {
+		return Details{}, err
+	}
+	if status != http.StatusOK {
+		return Details{}, fmt.Errorf("gitlab: %s: %s: %s", path, http.StatusText(status), strings.TrimSpace(string(body)))
+	}
+	var d glDetail
+	if err := json.Unmarshal(body, &d); err != nil {
+		return Details{}, fmt.Errorf("gitlab: decoding details: %w", err)
+	}
+	det := Details{Stars: d.StarCount, Topics: d.Topics}
+
+	langPath := path + "/languages"
+	if lb, lstatus, lerr := g.get(ctx, langPath); lerr == nil && lstatus == http.StatusOK {
+		det.Language = topLanguage(lb)
+	}
+	return det, nil
+}
+
+// topLanguage decodes a GitLab /languages response (a JSON object of
+// language->percentage) and returns the language with the highest percentage, or
+// "" when the map is empty or unparseable.
+func topLanguage(body []byte) string {
+	var langs map[string]float64
+	if err := json.Unmarshal(body, &langs); err != nil {
+		return ""
+	}
+	best := ""
+	var bestPct float64
+	for lang, pct := range langs {
+		if pct > bestPct || (pct == bestPct && (best == "" || lang < best)) {
+			best = lang
+			bestPct = pct
+		}
+	}
+	return best
+}
+
+// Readme fetches the raw README.md via the files API: GET
+// /projects/{id}/repository/files/README.md/raw?ref={branch}. The default branch
+// is discovered from the project details. A not-found yields an empty string and
+// nil error.
+func (g *GitLab) Readme(ctx context.Context, owner, name string) (string, error) {
+	id := projectID(owner, name)
+
+	// Discover the default branch (README raw fetch requires a ref).
+	ref := "HEAD"
+	if body, status, err := g.get(ctx, "/projects/"+id); err == nil && status == http.StatusOK {
+		var d glDetail
+		if json.Unmarshal(body, &d) == nil && d.DefaultBranch != "" {
+			ref = d.DefaultBranch
+		}
+	}
+
+	path := fmt.Sprintf("/projects/%s/repository/files/%s/raw?ref=%s",
+		id, url.PathEscape("README.md"), url.QueryEscape(ref))
+	body, status, err := g.get(ctx, path)
+	if err != nil {
+		return "", err
+	}
+	if status == http.StatusNotFound {
+		return "", nil
+	}
+	if status != http.StatusOK {
+		return "", fmt.Errorf("gitlab: %s: %s: %s", path, http.StatusText(status), strings.TrimSpace(string(body)))
+	}
+	return string(body), nil
+}
+
 // ListOwners discovers the groups the authenticated user is a member of via
 // /groups?min_access_level=10 (Guest and above), paginating via X-Next-Page. It
 // returns each group's full_path so it maps to the owner strings ListRepos uses

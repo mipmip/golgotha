@@ -30,6 +30,12 @@ type fakeFetchClient struct {
 
 func (f *fakeFetchClient) ListOwners(_ context.Context) ([]string, error) { return f.owners, nil }
 
+func (f *fakeFetchClient) RepoDetails(_ context.Context, _, _ string) (provider.Details, error) {
+	return provider.Details{}, nil
+}
+
+func (f *fakeFetchClient) Readme(_ context.Context, _, _ string) (string, error) { return "", nil }
+
 func (f *fakeFetchClient) ListRepos(ctx context.Context, owners []string) ([]provider.Repo, error) {
 	owner := config.SelfOwner
 	if len(owners) > 0 {

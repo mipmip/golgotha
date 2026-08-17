@@ -1,11 +1,11 @@
 ---
 # skull2-q75f
 title: shortcut enter should show repo details
-status: todo
+status: in-progress
 type: task
 priority: normal
 created_at: 2026-08-17T18:10:38Z
-updated_at: 2026-08-17T19:15:27Z
+updated_at: 2026-08-17T20:23:53Z
 parent: skull2-qati
 ---
 

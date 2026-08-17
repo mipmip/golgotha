@@ -64,6 +64,18 @@ func visibilityFromPrivate(private bool) string {
 	return VisibilityPublic
 }
 
+// Details holds a repository's lazily-fetched extended metadata (tier-2): the
+// star count, topics and primary language. It is fetched on demand and cached
+// apart from the lean list cache. See openspec add-repo-details.
+type Details struct {
+	// Stars is the repository's stargazer/star count.
+	Stars int
+	// Topics is the list of repository topics/tags.
+	Topics []string
+	// Language is the repository's primary language ("" when unknown).
+	Language string
+}
+
 // Provider lists repositories for a set of owners.
 type Provider interface {
 	// ListRepos returns the repositories for the given owners. An empty owners
@@ -74,6 +86,14 @@ type Provider interface {
 	// NOT include the user's own account (that is the SelfOwner sentinel added
 	// by config.ResolveOwners).
 	ListOwners(ctx context.Context) ([]string, error)
+	// RepoDetails fetches a single repository's extended details (stars, topics,
+	// primary language). owner is the repository's owner/namespace and name is
+	// the repository name.
+	RepoDetails(ctx context.Context, owner, name string) (Details, error)
+	// Readme fetches a single repository's raw README markdown. A repository with
+	// no README yields an empty string and a nil error (a clean "not found",
+	// never a hard error), so callers can degrade gracefully.
+	Readme(ctx context.Context, owner, name string) (string, error)
 }
 
 // ZeroDiscoveryWarning returns a human-readable warning when all_owners is

@@ -21,6 +21,10 @@ func (m *Model) View() string {
 		return ""
 	}
 
+	if m.nav == levelDetail {
+		return m.detailView()
+	}
+
 	// bodyText mutates m.offset via applyWindow and records the indicator range.
 	// Bubble Tea calls Update then View, so writing offset here is safe.
 	body := m.bodyText()
@@ -182,12 +186,138 @@ func indicator(first, last, n int) string {
 	return fmt.Sprintf("%d-%d of %d", first+1, last, n)
 }
 
+// detailView renders the single-repository detail view: a metadata header
+// (description, stars, topics, language, updated, visibility) followed by the
+// scrollable rendered README (or a loading / unavailable note).
+func (m *Model) detailView() string {
+	it := m.detailRepo
+	var b strings.Builder
+
+	// Breadcrumb / title.
+	crumb := "skull2"
+	if it.Provider != nil {
+		crumb += " > " + it.Provider.Name
+	}
+	crumb += " > " + it.key()
+	b.WriteString(titleStyle.Render(crumb))
+	b.WriteString("\n\n")
+
+	// Metadata header.
+	b.WriteString(m.detailHeader())
+	b.WriteString("\n")
+
+	// README body.
+	switch {
+	case m.detailLoading:
+		b.WriteString(m.spinner.View() + " " + dimStyle.Render("loading details..."))
+		b.WriteString("\n")
+	case m.detailUnavailable:
+		b.WriteString(dimStyle.Render("README unavailable"))
+		b.WriteString("\n")
+	default:
+		b.WriteString(m.readmeBody())
+		b.WriteString("\n")
+	}
+
+	if m.status != "" {
+		b.WriteString(dimStyle.Render(m.status))
+		b.WriteString("\n")
+	}
+	b.WriteString(footerStyle.Render(m.detailFooterText()))
+	b.WriteString("\n")
+	return b.String()
+}
+
+// detailHeader renders the tier-1/tier-2 metadata lines for the detail view.
+func (m *Model) detailHeader() string {
+	it := m.detailRepo
+	r := it.Repo
+	var b strings.Builder
+
+	if r.Description != "" {
+		b.WriteString(r.Description)
+		b.WriteString("\n")
+	}
+
+	// stars/language/visibility line (tier-2 shown once loaded).
+	parts := []string{}
+	if m.detailLoaded {
+		parts = append(parts, fmt.Sprintf("★ %d", m.detail.Stars))
+		if m.detail.Language != "" {
+			parts = append(parts, "lang: "+m.detail.Language)
+		}
+	}
+	parts = append(parts, "visibility: "+r.Visibility)
+	if !r.UpdatedAt.IsZero() {
+		parts = append(parts, "updated: "+r.UpdatedAt.Format("2006-01-02"))
+	}
+	if it.Cloned {
+		parts = append(parts, "cloned")
+	}
+	b.WriteString(dimStyle.Render(strings.Join(parts, "  ")))
+	b.WriteString("\n")
+
+	if m.detailLoaded && len(m.detail.Topics) > 0 {
+		b.WriteString(dimStyle.Render("topics: " + strings.Join(m.detail.Topics, ", ")))
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+// readmeBody renders (once per width) the raw README into the viewport and
+// returns the viewport view. An empty README shows a placeholder.
+func (m *Model) readmeBody() string {
+	width := m.width
+	if width <= 0 {
+		width = maxReadmeWidth
+	}
+
+	if strings.TrimSpace(m.detail.ReadmeMarkdown) == "" {
+		return dimStyle.Render("(no README)")
+	}
+
+	// Re-render only when the width changed since the last render.
+	if m.readmeRenderedWidth != width {
+		rendered := renderMarkdown(m.detail.ReadmeMarkdown, width)
+		m.readme.Width = width
+		height := m.detailViewportHeight()
+		if height > 0 {
+			m.readme.Height = height
+		}
+		m.readme.SetContent(rendered)
+		m.readmeRenderedWidth = width
+	}
+	return m.readme.View()
+}
+
+// detailViewportHeight returns the number of terminal rows available to the
+// README viewport (total height minus the detail chrome), or 0 when the height
+// is unknown (render everything).
+func (m *Model) detailViewportHeight() int {
+	if m.height <= 0 {
+		return 0
+	}
+	// chrome: title(1) + blank(1) + header lines + status(1) + footer(1).
+	chrome := 4
+	chrome += strings.Count(m.detailHeader(), "\n")
+	h := m.height - chrome
+	if h < 1 {
+		h = 1
+	}
+	return h
+}
+
+// detailFooterText renders the detail-view keybinding help bar.
+func (m *Model) detailFooterText() string {
+	return "up/down/pgup/pgdn: scroll  c: clone  o: open  r: refresh  esc: back  q: quit"
+}
+
 // footerText renders the keybinding help bar.
 func (m *Model) footerText() string {
 	if m.filtering {
 		return "enter: apply  esc: cancel filter"
 	}
 	return "up/down: move  pgup/pgdn ^u/^d: page  home/end: ends  " +
-		"enter: drill/clone  /: filter  f/a/v: fork/archived/vis  space: select  " +
+		"enter: drill/details  /: filter  f/a/v: fork/archived/vis  space: select  " +
 		"c: clone  o: open  r: refresh  esc: back  q: quit"
 }
