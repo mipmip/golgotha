@@ -6,7 +6,10 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
+
+	"github.com/mipmip/skull2/internal/config"
 )
 
 // version is overridden at build time via -ldflags "-X main.version=...".
@@ -32,13 +35,55 @@ func run(args []string) error {
 	case "", "help", "-h", "--help":
 		usage(os.Stdout)
 		return nil
+	case "config":
+		return runConfig(args[1:])
 	default:
 		usage(os.Stderr)
 		return fmt.Errorf("unknown command %q", cmd)
 	}
 }
 
-func usage(w *os.File) {
+// runConfig handles the `config` subcommand: `path` and `check`.
+func runConfig(args []string) error {
+	sub := ""
+	if len(args) > 0 {
+		sub = args[0]
+	}
+
+	switch sub {
+	case "path":
+		path, err := config.DefaultPath()
+		if err != nil {
+			return err
+		}
+		fmt.Println(path)
+		return nil
+	case "check":
+		path, err := config.DefaultPath()
+		if err != nil {
+			return err
+		}
+		cfg, err := config.LoadFrom(path)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("config OK: %s\n", path)
+		fmt.Printf("base_dir: %s\n", cfg.BaseDir)
+		fmt.Printf("providers: %d\n", len(cfg.Providers))
+		for i := range cfg.Providers {
+			p := &cfg.Providers[i]
+			fmt.Printf("  - %s (%s)\n", p.Name, p.Type)
+		}
+		return nil
+	case "", "-h", "--help", "help":
+		fmt.Println("Usage: skull2 config <path|check>")
+		return nil
+	default:
+		return fmt.Errorf("unknown config subcommand %q", sub)
+	}
+}
+
+func usage(w io.Writer) {
 	fmt.Fprintf(w, `skull2 %s - multi-provider git portfolio manager
 
 Usage:

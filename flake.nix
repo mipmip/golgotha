@@ -23,9 +23,8 @@
           pname = "skull2";
           inherit version;
           src = self;
-          # No third-party dependencies yet. When Bubble Tea et al. are added,
-          # set this to the real vendor hash (nix will report the expected one).
-          vendorHash = null;
+          # Update when Go dependencies change; nix reports the expected hash.
+          vendorHash = "sha256-g+yaVIx4jxpAQ/+WrGKxhVeliYx7nLQe/zsGpxV4Fn4=";
           subPackages = [ "cmd/skull2" ];
           ldflags = [ "-s" "-w" "-X main.version=${version}" ];
           meta = {

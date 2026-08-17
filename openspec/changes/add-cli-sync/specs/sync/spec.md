@@ -1,0 +1,51 @@
+## ADDED Requirements
+
+### Requirement: Clone missing repositories
+
+The system SHALL clone a repository to its templated target path when that path
+does not yet contain a git repository, using the provider's clone protocol.
+
+#### Scenario: Missing repo is cloned
+
+- **WHEN** a cached repository has no local clone at its resolved target path
+- **THEN** the system clones it there using the configured clone protocol
+
+### Requirement: Fast-forward pull existing repositories
+
+The system SHALL update existing clones with a fetch and fast-forward-only pull
+on the default branch, never forcing.
+
+#### Scenario: Clean repo is fast-forwarded
+
+- **WHEN** a local clone exists and is clean and behind its remote
+- **THEN** the system fetches and fast-forward-pulls the default branch
+
+#### Scenario: Dirty repo is skipped
+
+- **WHEN** a local clone has uncommitted changes
+- **THEN** the system skips it and records a warning instead of modifying it
+
+### Requirement: Sync summary
+
+The system SHALL report a per-provider summary of the run.
+
+#### Scenario: Summary counts outcomes
+
+- **WHEN** a sync run completes
+- **THEN** it reports counts of cloned, updated, skipped and failed repositories
+  per provider
+
+### Requirement: Sync command
+
+The system SHALL provide `skull2 sync [--provider NAME] [--no-refresh]` suitable
+for cron.
+
+#### Scenario: Refresh then sync
+
+- **WHEN** the user runs `skull2 sync` without `--no-refresh`
+- **THEN** the cache is refreshed before the engine runs
+
+#### Scenario: Non-zero exit on failure
+
+- **WHEN** any repository fails to clone or update
+- **THEN** the command logs the failure line-by-line and exits non-zero
