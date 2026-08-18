@@ -5,8 +5,8 @@ status: todo
 type: bug
 priority: normal
 created_at: 2026-08-18T08:46:14Z
-updated_at: 2026-08-18T08:46:14Z
-parent: skull2-qati
+updated_at: 2026-08-18T09:13:08Z
+parent: skull2-ok4c
 ---
 
 Self account is keyed by the SelfOwner "" sentinel; its repos carry their real owner login, so the self view over-shows.
