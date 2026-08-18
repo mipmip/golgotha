@@ -1,7 +1,7 @@
-# Golgotha sample configuration.
+# HupHop sample configuration.
 #
-# Copy to ~/.config/golgotha/config.yaml (or $XDG_CONFIG_HOME/golgotha/config.yaml)
-# and adjust. Validate with: gol config check
+# Copy to ~/.config/huphop/config.yaml (or $XDG_CONFIG_HOME/huphop/config.yaml)
+# and adjust. Validate with: hup config check
 #
 # Unknown keys are rejected (strict decoding), so stick to the keys below.
 
@@ -22,7 +22,7 @@ providers:
     clone_protocol: ssh          # ssh | https
     auth:
       cli: gh                    # reuse the `gh` CLI token when available
-      env: GOLGOTHA_GITHUB_TOKEN   # PAT fallback for headless/cron use
+      env: HUPHOP_GITHUB_TOKEN   # PAT fallback for headless/cron use
     # NOTE: leave `owners` unset to list YOUR OWN repositories
     # (the authenticated user). Only list `owners` for organizations —
     # each entry is fetched via /orgs/<owner>/repos, which does not work
@@ -36,7 +36,7 @@ providers:
     # `sync`/`refresh` eagerly fetch repos for every discovered owner; the TUI
     # lists owners immediately and fetches each on first entry. Any explicit
     # `owners` above are unioned in. Requires an org-read token scope (GitHub
-    # read:org) or discovery finds nothing and golgotha warns.
+    # read:org) or discovery finds nothing and huphop warns.
     #
     # all_owners: true
     #

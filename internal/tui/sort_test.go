@@ -6,8 +6,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 
-	"github.com/mipmip/golgotha/internal/config"
-	"github.com/mipmip/golgotha/internal/provider"
+	"github.com/mipmip/huphop/internal/config"
+	"github.com/mipmip/huphop/internal/provider"
 )
 
 // newSortModel builds a Model drilled into one owner whose repos have distinct

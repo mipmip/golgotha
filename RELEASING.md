@@ -1,4 +1,4 @@
-# Releasing golgotha
+# Releasing huphop
 
 This document describes how maintainers cut a release. Releases are automated:
 pushing a `vX.Y.Z` git tag triggers a GitHub Actions workflow that runs
@@ -9,8 +9,8 @@ goreleaser to build multi-platform binaries and publish a GitHub release.
 The version lives in **one** place — the `VERSION` file at the repo root
 (e.g. `0.1.0`, no `v` prefix). Three consumers read it:
 
-- The Go binary embeds it via `go:embed` (`version.go` → `golgotha.Version`,
-  used as the default of `main.version` in `cmd/gol/main.go`).
+- The Go binary embeds it via `go:embed` (`version.go` → `huphop.Version`,
+  used as the default of `main.version` in `cmd/hup/main.go`).
 - `flake.nix` reads it via `builtins.readFile ./VERSION`.
 - goreleaser overrides `main.version` from the **git tag** via ldflags at
   release time (the tag wins over the embedded default).
@@ -24,7 +24,7 @@ The version lives in **one** place — the `VERSION` file at the repo root
   flake `vendorHash`. If absent, the script warns and skips those steps.
 - `goreleaser` — only needed for local validation; the release itself runs it
   in CI. Provided by the devShell.
-- Push access to `git@github.com:mipmip/golgotha.git`.
+- Push access to `git@github.com:mipmip/huphop.git`.
 
 Enter the dev shell to get gum + goreleaser on PATH:
 
@@ -65,15 +65,15 @@ The script:
 
 ## Verifying the release
 
-- Watch the workflow: <https://github.com/mipmip/golgotha/actions>.
+- Watch the workflow: <https://github.com/mipmip/huphop/actions>.
 - Confirm the GitHub release contains the four archives
-  (`golgotha_X.Y.Z_{linux,darwin}_{amd64,arm64}.tar.gz`) and `checksums.txt`:
-  <https://github.com/mipmip/golgotha/releases>.
+  (`huphop_X.Y.Z_{linux,darwin}_{amd64,arm64}.tar.gz`) and `checksums.txt`:
+  <https://github.com/mipmip/huphop/releases>.
 - Optionally, verify a downloaded binary reports the right version:
 
   ```bash
-  tar -xzf golgotha_X.Y.Z_linux_amd64.tar.gz
-  ./gol version   # → gol vX.Y.Z
+  tar -xzf huphop_X.Y.Z_linux_amd64.tar.gz
+  ./hup version   # → hup vX.Y.Z
   ```
 
 ## Local validation (optional)

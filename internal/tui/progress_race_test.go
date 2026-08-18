@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/mipmip/golgotha/internal/cache"
-	"github.com/mipmip/golgotha/internal/config"
-	"github.com/mipmip/golgotha/internal/fetch"
-	"github.com/mipmip/golgotha/internal/provider"
+	"github.com/mipmip/huphop/internal/cache"
+	"github.com/mipmip/huphop/internal/config"
+	"github.com/mipmip/huphop/internal/fetch"
+	"github.com/mipmip/huphop/internal/provider"
 )
 
 // fakeOwnerFetcher implements provider.Provider (+ OwnerFetcher). Its FetchOwner

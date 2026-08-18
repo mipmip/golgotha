@@ -3,7 +3,7 @@ package tui
 import (
 	"testing"
 
-	"github.com/mipmip/golgotha/internal/config"
+	"github.com/mipmip/huphop/internal/config"
 )
 
 func TestSortKeyPressCycles(t *testing.T) {

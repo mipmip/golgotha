@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mipmip/golgotha/internal/config"
-	"github.com/mipmip/golgotha/internal/fetch"
+	"github.com/mipmip/huphop/internal/config"
+	"github.com/mipmip/huphop/internal/fetch"
 )
 
 // defaultGitLabAPI is the public GitLab v4 API base URL.

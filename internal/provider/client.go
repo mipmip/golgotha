@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/mipmip/golgotha/internal/config"
-	"github.com/mipmip/golgotha/internal/fetch"
+	"github.com/mipmip/huphop/internal/config"
+	"github.com/mipmip/huphop/internal/fetch"
 )
 
 // OwnerFetcher is a provider client that can fetch a single owner's

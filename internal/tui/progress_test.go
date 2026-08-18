@@ -9,8 +9,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/mipmip/golgotha/internal/config"
-	"github.com/mipmip/golgotha/internal/fetch"
+	"github.com/mipmip/huphop/internal/config"
+	"github.com/mipmip/huphop/internal/fetch"
 )
 
 // newProgressModel builds a lazy model wired to a streaming progressFetcher whose

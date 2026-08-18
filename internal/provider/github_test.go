@@ -7,11 +7,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/mipmip/golgotha/internal/config"
+	"github.com/mipmip/huphop/internal/config"
 )
 
 func TestGitHubListReposPaginationAndMapping(t *testing.T) {
-	t.Setenv("GOLGOTHA_GITHUB_TOKEN", "tok-123")
+	t.Setenv("HUPHOP_GITHUB_TOKEN", "tok-123")
 
 	var gotAuth string
 	mux := http.NewServeMux()
@@ -52,7 +52,7 @@ func TestGitHubListReposPaginationAndMapping(t *testing.T) {
 		Type:   config.ProviderGitHub,
 		Short:  "gh",
 		APIURL: srv.URL,
-		Auth:   config.Auth{Env: "GOLGOTHA_GITHUB_TOKEN"},
+		Auth:   config.Auth{Env: "HUPHOP_GITHUB_TOKEN"},
 		Owners: []string{"acme"},
 	}
 	gh := NewGitHub(cfg, srv.Client())
@@ -88,7 +88,7 @@ func TestGitHubListReposPaginationAndMapping(t *testing.T) {
 }
 
 func TestGitHubIncludeArchivedAndExcludeForks(t *testing.T) {
-	t.Setenv("GOLGOTHA_GITHUB_TOKEN", "tok")
+	t.Setenv("HUPHOP_GITHUB_TOKEN", "tok")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/orgs/acme/repos", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `[
@@ -104,7 +104,7 @@ func TestGitHubIncludeArchivedAndExcludeForks(t *testing.T) {
 	inclForks := false
 	cfg := config.Provider{
 		Name: "github", Type: config.ProviderGitHub, Short: "gh", APIURL: srv.URL,
-		Auth: config.Auth{Env: "GOLGOTHA_GITHUB_TOKEN"}, Owners: []string{"acme"},
+		Auth: config.Auth{Env: "HUPHOP_GITHUB_TOKEN"}, Owners: []string{"acme"},
 		IncludeArchived: &inclArch, IncludeForks: &inclForks,
 	}
 	gh := NewGitHub(cfg, srv.Client())
@@ -122,7 +122,7 @@ func TestGitHubIncludeArchivedAndExcludeForks(t *testing.T) {
 }
 
 func TestGitHubAuthenticatedUserWhenNoOwners(t *testing.T) {
-	t.Setenv("GOLGOTHA_GITHUB_TOKEN", "tok")
+	t.Setenv("HUPHOP_GITHUB_TOKEN", "tok")
 	var hitUserRepos bool
 	mux := http.NewServeMux()
 	mux.HandleFunc("/user/repos", func(w http.ResponseWriter, r *http.Request) {
@@ -134,7 +134,7 @@ func TestGitHubAuthenticatedUserWhenNoOwners(t *testing.T) {
 
 	cfg := config.Provider{
 		Name: "github", Type: config.ProviderGitHub, Short: "gh", APIURL: srv.URL,
-		Auth: config.Auth{Env: "GOLGOTHA_GITHUB_TOKEN"},
+		Auth: config.Auth{Env: "HUPHOP_GITHUB_TOKEN"},
 	}
 	gh := NewGitHub(cfg, srv.Client())
 	repos, err := gh.ListRepos(context.Background(), nil)
@@ -149,7 +149,7 @@ func TestGitHubAuthenticatedUserWhenNoOwners(t *testing.T) {
 func TestGitHubAuthErrorNoToken(t *testing.T) {
 	cfg := config.Provider{
 		Name: "github", Type: config.ProviderGitHub, Short: "gh",
-		Auth: config.Auth{Env: "GOLGOTHA_GITHUB_TOKEN_MISSING_XYZ"},
+		Auth: config.Auth{Env: "HUPHOP_GITHUB_TOKEN_MISSING_XYZ"},
 	}
 	gh := NewGitHub(cfg, http.DefaultClient)
 	gh.getter = stubGetter{}
@@ -160,14 +160,14 @@ func TestGitHubAuthErrorNoToken(t *testing.T) {
 }
 
 func TestGitHubHTTPError(t *testing.T) {
-	t.Setenv("GOLGOTHA_GITHUB_TOKEN", "tok")
+	t.Setenv("HUPHOP_GITHUB_TOKEN", "tok")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "boom", http.StatusInternalServerError)
 	}))
 	defer srv.Close()
 	cfg := config.Provider{
 		Name: "github", Type: config.ProviderGitHub, Short: "gh", APIURL: srv.URL,
-		Auth: config.Auth{Env: "GOLGOTHA_GITHUB_TOKEN"}, Owners: []string{"acme"},
+		Auth: config.Auth{Env: "HUPHOP_GITHUB_TOKEN"}, Owners: []string{"acme"},
 	}
 	gh := NewGitHub(cfg, srv.Client())
 	if _, err := gh.ListRepos(context.Background(), cfg.Owners); err == nil {
@@ -198,7 +198,7 @@ func TestNextLink(t *testing.T) {
 }
 
 func TestGitHubListOwnersPagination(t *testing.T) {
-	t.Setenv("GOLGOTHA_GITHUB_TOKEN", "tok")
+	t.Setenv("HUPHOP_GITHUB_TOKEN", "tok")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/user/orgs", func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Query().Get("page") {
@@ -216,7 +216,7 @@ func TestGitHubListOwnersPagination(t *testing.T) {
 
 	cfg := config.Provider{
 		Name: "github", Type: config.ProviderGitHub, Short: "gh", APIURL: srv.URL,
-		Auth: config.Auth{Env: "GOLGOTHA_GITHUB_TOKEN"},
+		Auth: config.Auth{Env: "HUPHOP_GITHUB_TOKEN"},
 	}
 	gh := NewGitHub(cfg, srv.Client())
 	owners, err := gh.ListOwners(context.Background())
@@ -229,13 +229,13 @@ func TestGitHubListOwnersPagination(t *testing.T) {
 }
 
 func TestGitHubListOwnersEmptyAndError(t *testing.T) {
-	t.Setenv("GOLGOTHA_GITHUB_TOKEN", "tok")
+	t.Setenv("HUPHOP_GITHUB_TOKEN", "tok")
 	// Empty discovery.
 	empty := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `[]`)
 	}))
 	defer empty.Close()
-	cfg := config.Provider{Name: "github", Type: config.ProviderGitHub, Short: "gh", APIURL: empty.URL, Auth: config.Auth{Env: "GOLGOTHA_GITHUB_TOKEN"}}
+	cfg := config.Provider{Name: "github", Type: config.ProviderGitHub, Short: "gh", APIURL: empty.URL, Auth: config.Auth{Env: "HUPHOP_GITHUB_TOKEN"}}
 	owners, err := NewGitHub(cfg, empty.Client()).ListOwners(context.Background())
 	if err != nil || len(owners) != 0 {
 		t.Fatalf("empty discovery: owners=%v err=%v", owners, err)

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/mipmip/golgotha/internal/config"
+	"github.com/mipmip/huphop/internal/config"
 )
 
 // Data holds the fields available to a clone-path template. See BRIEFING.md §5.

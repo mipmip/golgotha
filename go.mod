@@ -1,4 +1,4 @@
-module github.com/mipmip/golgotha
+module github.com/mipmip/huphop
 
 go 1.26
 

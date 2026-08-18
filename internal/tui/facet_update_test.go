@@ -6,8 +6,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 
-	"github.com/mipmip/golgotha/internal/config"
-	"github.com/mipmip/golgotha/internal/provider"
+	"github.com/mipmip/huphop/internal/config"
+	"github.com/mipmip/huphop/internal/provider"
 )
 
 // newFacetModel builds a Model already drilled into one owner whose repos vary

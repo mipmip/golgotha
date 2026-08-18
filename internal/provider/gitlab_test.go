@@ -7,11 +7,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/mipmip/golgotha/internal/config"
+	"github.com/mipmip/huphop/internal/config"
 )
 
 func TestGitLabGroupSubgroupsPaginationMapping(t *testing.T) {
-	t.Setenv("GOLGOTHA_GITLAB_TOKEN", "gl-tok")
+	t.Setenv("HUPHOP_GITLAB_TOKEN", "gl-tok")
 
 	var gotToken string
 	mux := http.NewServeMux()
@@ -49,7 +49,7 @@ func TestGitLabGroupSubgroupsPaginationMapping(t *testing.T) {
 
 	cfg := config.Provider{
 		Name: "gitlab", Type: config.ProviderGitLab, Short: "gl", APIURL: srv.URL,
-		Auth: config.Auth{Env: "GOLGOTHA_GITLAB_TOKEN"}, Owners: []string{"acme"},
+		Auth: config.Auth{Env: "HUPHOP_GITLAB_TOKEN"}, Owners: []string{"acme"},
 	}
 	gl := NewGitLab(cfg, srv.Client())
 	repos, err := gl.ListRepos(context.Background(), cfg.Owners)
@@ -82,7 +82,7 @@ func TestGitLabGroupSubgroupsPaginationMapping(t *testing.T) {
 }
 
 func TestGitLabMembershipWhenNoOwners(t *testing.T) {
-	t.Setenv("GOLGOTHA_GITLAB_TOKEN", "gl-tok")
+	t.Setenv("HUPHOP_GITLAB_TOKEN", "gl-tok")
 	var hit bool
 	mux := http.NewServeMux()
 	mux.HandleFunc("/projects", func(w http.ResponseWriter, r *http.Request) {
@@ -96,7 +96,7 @@ func TestGitLabMembershipWhenNoOwners(t *testing.T) {
 	defer srv.Close()
 	cfg := config.Provider{
 		Name: "gitlab", Type: config.ProviderGitLab, Short: "gl", APIURL: srv.URL,
-		Auth: config.Auth{Env: "GOLGOTHA_GITLAB_TOKEN"},
+		Auth: config.Auth{Env: "HUPHOP_GITLAB_TOKEN"},
 	}
 	gl := NewGitLab(cfg, srv.Client())
 	repos, err := gl.ListRepos(context.Background(), nil)
@@ -109,7 +109,7 @@ func TestGitLabMembershipWhenNoOwners(t *testing.T) {
 }
 
 func TestGitLabFilterArchived(t *testing.T) {
-	t.Setenv("GOLGOTHA_GITLAB_TOKEN", "gl-tok")
+	t.Setenv("HUPHOP_GITLAB_TOKEN", "gl-tok")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/groups/acme/projects", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `[
@@ -121,7 +121,7 @@ func TestGitLabFilterArchived(t *testing.T) {
 	defer srv.Close()
 	cfg := config.Provider{
 		Name: "gitlab", Type: config.ProviderGitLab, Short: "gl", APIURL: srv.URL,
-		Auth: config.Auth{Env: "GOLGOTHA_GITLAB_TOKEN"}, Owners: []string{"acme"},
+		Auth: config.Auth{Env: "HUPHOP_GITLAB_TOKEN"}, Owners: []string{"acme"},
 	}
 	gl := NewGitLab(cfg, srv.Client())
 	repos, err := gl.ListRepos(context.Background(), cfg.Owners)
@@ -134,7 +134,7 @@ func TestGitLabFilterArchived(t *testing.T) {
 }
 
 func TestGitLabNamespaceFallbackToPath(t *testing.T) {
-	t.Setenv("GOLGOTHA_GITLAB_TOKEN", "gl-tok")
+	t.Setenv("HUPHOP_GITLAB_TOKEN", "gl-tok")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/groups/acme/projects", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `[{"name":"A","path":"a","namespace":{"path":"onlypath"}}]`)
@@ -143,7 +143,7 @@ func TestGitLabNamespaceFallbackToPath(t *testing.T) {
 	defer srv.Close()
 	cfg := config.Provider{
 		Name: "gitlab", Type: config.ProviderGitLab, Short: "gl", APIURL: srv.URL,
-		Auth: config.Auth{Env: "GOLGOTHA_GITLAB_TOKEN"}, Owners: []string{"acme"},
+		Auth: config.Auth{Env: "HUPHOP_GITLAB_TOKEN"}, Owners: []string{"acme"},
 	}
 	gl := NewGitLab(cfg, srv.Client())
 	repos, err := gl.ListRepos(context.Background(), cfg.Owners)
@@ -156,14 +156,14 @@ func TestGitLabNamespaceFallbackToPath(t *testing.T) {
 }
 
 func TestGitLabHTTPError(t *testing.T) {
-	t.Setenv("GOLGOTHA_GITLAB_TOKEN", "gl-tok")
+	t.Setenv("HUPHOP_GITLAB_TOKEN", "gl-tok")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "denied", http.StatusForbidden)
 	}))
 	defer srv.Close()
 	cfg := config.Provider{
 		Name: "gitlab", Type: config.ProviderGitLab, Short: "gl", APIURL: srv.URL,
-		Auth: config.Auth{Env: "GOLGOTHA_GITLAB_TOKEN"}, Owners: []string{"acme"},
+		Auth: config.Auth{Env: "HUPHOP_GITLAB_TOKEN"}, Owners: []string{"acme"},
 	}
 	gl := NewGitLab(cfg, srv.Client())
 	if _, err := gl.ListRepos(context.Background(), cfg.Owners); err == nil {
@@ -192,7 +192,7 @@ func TestNewDefaultRegistryBuildsAllTypes(t *testing.T) {
 }
 
 func TestGitLabListOwnersPagination(t *testing.T) {
-	t.Setenv("GOLGOTHA_GITLAB_TOKEN", "gl-tok")
+	t.Setenv("HUPHOP_GITLAB_TOKEN", "gl-tok")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/groups", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Query().Get("min_access_level") != "10" {
@@ -211,7 +211,7 @@ func TestGitLabListOwnersPagination(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	cfg := config.Provider{Name: "gitlab", Type: config.ProviderGitLab, Short: "gl", APIURL: srv.URL, Auth: config.Auth{Env: "GOLGOTHA_GITLAB_TOKEN"}}
+	cfg := config.Provider{Name: "gitlab", Type: config.ProviderGitLab, Short: "gl", APIURL: srv.URL, Auth: config.Auth{Env: "HUPHOP_GITLAB_TOKEN"}}
 	owners, err := NewGitLab(cfg, srv.Client()).ListOwners(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -228,12 +228,12 @@ func TestGitLabListOwnersPagination(t *testing.T) {
 }
 
 func TestGitLabListOwnersError(t *testing.T) {
-	t.Setenv("GOLGOTHA_GITLAB_TOKEN", "gl-tok")
+	t.Setenv("HUPHOP_GITLAB_TOKEN", "gl-tok")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "boom", http.StatusUnauthorized)
 	}))
 	defer srv.Close()
-	cfg := config.Provider{Name: "gitlab", Type: config.ProviderGitLab, Short: "gl", APIURL: srv.URL, Auth: config.Auth{Env: "GOLGOTHA_GITLAB_TOKEN"}}
+	cfg := config.Provider{Name: "gitlab", Type: config.ProviderGitLab, Short: "gl", APIURL: srv.URL, Auth: config.Auth{Env: "HUPHOP_GITLAB_TOKEN"}}
 	if _, err := NewGitLab(cfg, srv.Client()).ListOwners(context.Background()); err == nil {
 		t.Fatal("expected error")
 	}

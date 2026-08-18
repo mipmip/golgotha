@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/mipmip/golgotha/internal/config"
+	"github.com/mipmip/huphop/internal/config"
 )
 
 func TestNormalizeVisibility(t *testing.T) {
@@ -36,7 +36,7 @@ func TestVisibilityFromPrivate(t *testing.T) {
 }
 
 func TestGitHubMapsVisibilityFromPrivate(t *testing.T) {
-	t.Setenv("GOLGOTHA_GITHUB_TOKEN", "tok")
+	t.Setenv("HUPHOP_GITHUB_TOKEN", "tok")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/orgs/acme/repos", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `[
@@ -49,7 +49,7 @@ func TestGitHubMapsVisibilityFromPrivate(t *testing.T) {
 
 	cfg := config.Provider{
 		Name: "github", Type: config.ProviderGitHub, Short: "gh", APIURL: srv.URL,
-		Auth: config.Auth{Env: "GOLGOTHA_GITHUB_TOKEN"}, Owners: []string{"acme"},
+		Auth: config.Auth{Env: "HUPHOP_GITHUB_TOKEN"}, Owners: []string{"acme"},
 	}
 	gh := NewGitHub(cfg, srv.Client())
 	repos, err := gh.ListRepos(context.Background(), cfg.Owners)
@@ -63,7 +63,7 @@ func TestGitHubMapsVisibilityFromPrivate(t *testing.T) {
 }
 
 func TestCodebergMapsVisibilityFromPrivate(t *testing.T) {
-	t.Setenv("GOLGOTHA_CODEBERG_TOKEN", "tok")
+	t.Setenv("HUPHOP_CODEBERG_TOKEN", "tok")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/orgs/acme/repos", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `[
@@ -76,7 +76,7 @@ func TestCodebergMapsVisibilityFromPrivate(t *testing.T) {
 
 	cfg := config.Provider{
 		Name: "codeberg", Type: config.ProviderCodeberg, Short: "cb", APIURL: srv.URL,
-		Auth: config.Auth{Env: "GOLGOTHA_CODEBERG_TOKEN"}, Owners: []string{"acme"},
+		Auth: config.Auth{Env: "HUPHOP_CODEBERG_TOKEN"}, Owners: []string{"acme"},
 	}
 	cb := NewCodeberg(cfg, srv.Client())
 	repos, err := cb.ListRepos(context.Background(), cfg.Owners)
@@ -90,7 +90,7 @@ func TestCodebergMapsVisibilityFromPrivate(t *testing.T) {
 }
 
 func TestGitLabMapsVisibilityValue(t *testing.T) {
-	t.Setenv("GOLGOTHA_GITLAB_TOKEN", "tok")
+	t.Setenv("HUPHOP_GITLAB_TOKEN", "tok")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/groups/acme/projects", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `[
@@ -105,7 +105,7 @@ func TestGitLabMapsVisibilityValue(t *testing.T) {
 
 	cfg := config.Provider{
 		Name: "gitlab", Type: config.ProviderGitLab, Short: "gl", APIURL: srv.URL,
-		Auth: config.Auth{Env: "GOLGOTHA_GITLAB_TOKEN"}, Owners: []string{"acme"},
+		Auth: config.Auth{Env: "HUPHOP_GITLAB_TOKEN"}, Owners: []string{"acme"},
 	}
 	gl := NewGitLab(cfg, srv.Client())
 	repos, err := gl.ListRepos(context.Background(), cfg.Owners)

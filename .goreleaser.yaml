@@ -1,4 +1,4 @@
-# goreleaser configuration for golgotha.
+# goreleaser configuration for huphop.
 # Docs: https://goreleaser.com
 #
 # The flake owns reproducible dev/build; goreleaser owns the release artifacts
@@ -7,16 +7,16 @@
 # VERSION-file default embedded in the binary.
 version: 2
 
-project_name: golgotha
+project_name: huphop
 
 before:
   hooks:
     - go mod tidy
 
 builds:
-  - id: gol
-    main: ./cmd/gol
-    binary: gol
+  - id: hup
+    main: ./cmd/hup
+    binary: hup
     env:
       - CGO_ENABLED=0
     goos:
@@ -29,7 +29,7 @@ builds:
       - -s -w -X main.version={{ .Version }}
 
 archives:
-  - id: gol
+  - id: hup
     formats: [tar.gz]
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
@@ -46,4 +46,4 @@ changelog:
 release:
   github:
     owner: mipmip
-    name: golgotha
+    name: huphop

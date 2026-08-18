@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# release.sh — interactive, gated release for golgotha.
+# release.sh — interactive, gated release for huphop.
 #
 # Flow:
 #   1. Safety checks: clean working tree, on `main`, CHANGELOG has an
@@ -157,4 +157,4 @@ git tag "${TAG}" @-
 git push origin "${TAG}"
 
 info "Done. Tag ${TAG} pushed; GitHub Actions will build and publish the release."
-info "Watch: https://github.com/mipmip/golgotha/actions"
+info "Watch: https://github.com/mipmip/huphop/actions"

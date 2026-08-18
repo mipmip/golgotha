@@ -1,9 +1,9 @@
-// Package golgotha exposes the embedded release version as the single source of
+// Package huphop exposes the embedded release version as the single source of
 // truth. The VERSION file at the repo root is read at build time via go:embed;
 // the same file is read by flake.nix (builtins.readFile) and by goreleaser
 // (git tag → ldflags override). Keeping one file with three consumers prevents
 // version drift.
-package golgotha
+package huphop
 
 import (
 	_ "embed"

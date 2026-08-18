@@ -9,12 +9,12 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/mipmip/golgotha/internal/cache"
-	"github.com/mipmip/golgotha/internal/clonepath"
-	"github.com/mipmip/golgotha/internal/config"
-	"github.com/mipmip/golgotha/internal/fetch"
-	"github.com/mipmip/golgotha/internal/provider"
-	"github.com/mipmip/golgotha/internal/syncer"
+	"github.com/mipmip/huphop/internal/cache"
+	"github.com/mipmip/huphop/internal/clonepath"
+	"github.com/mipmip/huphop/internal/config"
+	"github.com/mipmip/huphop/internal/fetch"
+	"github.com/mipmip/huphop/internal/provider"
+	"github.com/mipmip/huphop/internal/syncer"
 )
 
 // cloneResultMsg is emitted after a single clone attempt completes.

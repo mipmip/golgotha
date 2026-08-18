@@ -9,7 +9,7 @@ package tui
 import (
 	"strings"
 
-	"github.com/mipmip/golgotha/internal/provider"
+	"github.com/mipmip/huphop/internal/provider"
 )
 
 // triState is a three-way facet: include everything, only matches, or hide

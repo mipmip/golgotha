@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/mipmip/golgotha/internal/config"
+	"github.com/mipmip/huphop/internal/config"
 )
 
 func TestCodebergListReposPaginationAuthMapping(t *testing.T) {
-	t.Setenv("GOLGOTHA_CODEBERG_TOKEN", "cb-tok")
+	t.Setenv("HUPHOP_CODEBERG_TOKEN", "cb-tok")
 
 	// Build a full page (codebergPageLimit items) then a short final page.
 	fullPage := func() string {
@@ -51,7 +51,7 @@ func TestCodebergListReposPaginationAuthMapping(t *testing.T) {
 
 	cfg := config.Provider{
 		Name: "codeberg", Type: config.ProviderCodeberg, Short: "cb", APIURL: srv.URL,
-		Auth: config.Auth{Env: "GOLGOTHA_CODEBERG_TOKEN"}, Owners: []string{"org"},
+		Auth: config.Auth{Env: "HUPHOP_CODEBERG_TOKEN"}, Owners: []string{"org"},
 	}
 	cb := NewCodeberg(cfg, srv.Client())
 	repos, err := cb.ListRepos(context.Background(), cfg.Owners)
@@ -76,7 +76,7 @@ func TestCodebergListReposPaginationAuthMapping(t *testing.T) {
 }
 
 func TestCodebergShortPageStops(t *testing.T) {
-	t.Setenv("GOLGOTHA_CODEBERG_TOKEN", "cb-tok")
+	t.Setenv("HUPHOP_CODEBERG_TOKEN", "cb-tok")
 	calls := 0
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/orgs/org/repos", func(w http.ResponseWriter, r *http.Request) {
@@ -87,7 +87,7 @@ func TestCodebergShortPageStops(t *testing.T) {
 	defer srv.Close()
 	cfg := config.Provider{
 		Name: "codeberg", Type: config.ProviderCodeberg, Short: "cb", APIURL: srv.URL,
-		Auth: config.Auth{Env: "GOLGOTHA_CODEBERG_TOKEN"}, Owners: []string{"org"},
+		Auth: config.Auth{Env: "HUPHOP_CODEBERG_TOKEN"}, Owners: []string{"org"},
 	}
 	cb := NewCodeberg(cfg, srv.Client())
 	repos, err := cb.ListRepos(context.Background(), cfg.Owners)
@@ -100,7 +100,7 @@ func TestCodebergShortPageStops(t *testing.T) {
 }
 
 func TestCodebergFilterArchivedForks(t *testing.T) {
-	t.Setenv("GOLGOTHA_CODEBERG_TOKEN", "cb-tok")
+	t.Setenv("HUPHOP_CODEBERG_TOKEN", "cb-tok")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/orgs/org/repos", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `[
@@ -114,7 +114,7 @@ func TestCodebergFilterArchivedForks(t *testing.T) {
 	inclForks := false
 	cfg := config.Provider{
 		Name: "codeberg", Type: config.ProviderCodeberg, Short: "cb", APIURL: srv.URL,
-		Auth: config.Auth{Env: "GOLGOTHA_CODEBERG_TOKEN"}, Owners: []string{"org"},
+		Auth: config.Auth{Env: "HUPHOP_CODEBERG_TOKEN"}, Owners: []string{"org"},
 		IncludeForks: &inclForks,
 	}
 	cb := NewCodeberg(cfg, srv.Client())
@@ -128,7 +128,7 @@ func TestCodebergFilterArchivedForks(t *testing.T) {
 }
 
 func TestCodebergUserReposWhenNoOwners(t *testing.T) {
-	t.Setenv("GOLGOTHA_CODEBERG_TOKEN", "cb-tok")
+	t.Setenv("HUPHOP_CODEBERG_TOKEN", "cb-tok")
 	var hit bool
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/user/repos", func(w http.ResponseWriter, r *http.Request) {
@@ -139,7 +139,7 @@ func TestCodebergUserReposWhenNoOwners(t *testing.T) {
 	defer srv.Close()
 	cfg := config.Provider{
 		Name: "codeberg", Type: config.ProviderCodeberg, Short: "cb", APIURL: srv.URL,
-		Auth: config.Auth{Env: "GOLGOTHA_CODEBERG_TOKEN"},
+		Auth: config.Auth{Env: "HUPHOP_CODEBERG_TOKEN"},
 	}
 	cb := NewCodeberg(cfg, srv.Client())
 	repos, err := cb.ListRepos(context.Background(), nil)
@@ -152,14 +152,14 @@ func TestCodebergUserReposWhenNoOwners(t *testing.T) {
 }
 
 func TestCodebergHTTPError(t *testing.T) {
-	t.Setenv("GOLGOTHA_CODEBERG_TOKEN", "cb-tok")
+	t.Setenv("HUPHOP_CODEBERG_TOKEN", "cb-tok")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "nope", http.StatusUnauthorized)
 	}))
 	defer srv.Close()
 	cfg := config.Provider{
 		Name: "codeberg", Type: config.ProviderCodeberg, Short: "cb", APIURL: srv.URL,
-		Auth: config.Auth{Env: "GOLGOTHA_CODEBERG_TOKEN"}, Owners: []string{"org"},
+		Auth: config.Auth{Env: "HUPHOP_CODEBERG_TOKEN"}, Owners: []string{"org"},
 	}
 	cb := NewCodeberg(cfg, srv.Client())
 	if _, err := cb.ListRepos(context.Background(), cfg.Owners); err == nil {
@@ -175,7 +175,7 @@ func TestCodebergDefaultBase(t *testing.T) {
 }
 
 func TestCodebergListOwners(t *testing.T) {
-	t.Setenv("GOLGOTHA_CODEBERG_TOKEN", "cb-tok")
+	t.Setenv("HUPHOP_CODEBERG_TOKEN", "cb-tok")
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/user/orgs", func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Query().Get("page") {
@@ -198,7 +198,7 @@ func TestCodebergListOwners(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	cfg := config.Provider{Name: "codeberg", Type: config.ProviderCodeberg, Short: "cb", APIURL: srv.URL, Auth: config.Auth{Env: "GOLGOTHA_CODEBERG_TOKEN"}}
+	cfg := config.Provider{Name: "codeberg", Type: config.ProviderCodeberg, Short: "cb", APIURL: srv.URL, Auth: config.Auth{Env: "HUPHOP_CODEBERG_TOKEN"}}
 	owners, err := NewCodeberg(cfg, srv.Client()).ListOwners(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -209,12 +209,12 @@ func TestCodebergListOwners(t *testing.T) {
 }
 
 func TestCodebergListOwnersError(t *testing.T) {
-	t.Setenv("GOLGOTHA_CODEBERG_TOKEN", "cb-tok")
+	t.Setenv("HUPHOP_CODEBERG_TOKEN", "cb-tok")
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "boom", http.StatusInternalServerError)
 	}))
 	defer srv.Close()
-	cfg := config.Provider{Name: "codeberg", Type: config.ProviderCodeberg, Short: "cb", APIURL: srv.URL, Auth: config.Auth{Env: "GOLGOTHA_CODEBERG_TOKEN"}}
+	cfg := config.Provider{Name: "codeberg", Type: config.ProviderCodeberg, Short: "cb", APIURL: srv.URL, Auth: config.Auth{Env: "HUPHOP_CODEBERG_TOKEN"}}
 	if _, err := NewCodeberg(cfg, srv.Client()).ListOwners(context.Background()); err == nil {
 		t.Fatal("expected error")
 	}

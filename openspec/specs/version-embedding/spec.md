@@ -15,18 +15,18 @@ A `VERSION` file at the project root SHALL contain the version number (e.g.
 
 ### Requirement: Binary embeds the version
 
-The `gol version` command SHALL print the version embedded from the `VERSION`
+The `hup version` command SHALL print the version embedded from the `VERSION`
 file via `go:embed`, unless overridden at build time.
 
 #### Scenario: Dev build reads VERSION
 
-- **WHEN** `go run ./cmd/gol version` is executed
+- **WHEN** `go run ./cmd/hup version` is executed
 - **THEN** it prints the version from the `VERSION` file
 
 #### Scenario: ldflags override wins
 
 - **WHEN** the binary is built with `-ldflags "-X main.version=v1.2.3"`
-- **THEN** `gol version` prints `v1.2.3` (ldflags take precedence for
+- **THEN** `hup version` prints `v1.2.3` (ldflags take precedence for
   goreleaser)
 
 ### Requirement: Flake reads the version

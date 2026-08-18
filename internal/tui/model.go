@@ -1,4 +1,4 @@
-// Package tui implements the Bubble Tea interactive browser for golgotha: it reads
+// Package tui implements the Bubble Tea interactive browser for huphop: it reads
 // the per-provider cache and lets the user navigate provider -> owner -> repos,
 // fuzzy-filter, clone (single or bulk), open a repo in the browser and refresh a
 // provider's cache.
@@ -19,10 +19,10 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/mipmip/golgotha/internal/cache"
-	"github.com/mipmip/golgotha/internal/config"
-	"github.com/mipmip/golgotha/internal/fetch"
-	"github.com/mipmip/golgotha/internal/provider"
+	"github.com/mipmip/huphop/internal/cache"
+	"github.com/mipmip/huphop/internal/config"
+	"github.com/mipmip/huphop/internal/fetch"
+	"github.com/mipmip/huphop/internal/provider"
 )
 
 // sortKey selects the repo-list ordering. The zero value (none) preserves the

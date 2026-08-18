@@ -1,4 +1,4 @@
-# golgotha
+# huphop
 
 Multi-provider git portfolio manager — a uniform on-disk layout for all your
 git repos across GitHub, Codeberg/Forgejo and GitLab, a TUI to browse and
@@ -26,5 +26,5 @@ nix flake check        # build + tests
 - **CLI sync**: clone missing repos and fast-forward-pull existing ones;
   dirty-tree safe, cron-friendly.
 
-Configuration lives in `~/.config/golgotha/config.yaml`; cached repo metadata in
-`~/.cache/golgotha/`.
+Configuration lives in `~/.config/huphop/config.yaml`; cached repo metadata in
+`~/.cache/huphop/`.

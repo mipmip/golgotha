@@ -16,14 +16,14 @@ organizations via the REST API, following pagination.
 
 #### Scenario: Auth and base URL
 
-- **WHEN** a `gh` token or `GOLGOTHA_GITHUB_TOKEN` is available and `api_url` is
+- **WHEN** a `gh` token or `HUPHOP_GITHUB_TOKEN` is available and `api_url` is
   set for GitHub Enterprise
 - **THEN** requests are authenticated and sent to the configured base URL
 
 ### Requirement: Codeberg client lists repositories
 
 The system SHALL list repositories from a Forgejo/Gitea instance (Codeberg) via
-its REST API, following pagination, authenticated by `GOLGOTHA_CODEBERG_TOKEN`.
+its REST API, following pagination, authenticated by `HUPHOP_CODEBERG_TOKEN`.
 
 #### Scenario: Paginated listing
 
@@ -35,7 +35,7 @@ its REST API, following pagination, authenticated by `GOLGOTHA_CODEBERG_TOKEN`.
 
 The system SHALL list projects from GitLab v4 across the configured groups and
 subgroups plus owned projects, following pagination, authenticated by a `glab`
-token or `GOLGOTHA_GITLAB_TOKEN`.
+token or `HUPHOP_GITLAB_TOKEN`.
 
 #### Scenario: Groups and subgroups
 
