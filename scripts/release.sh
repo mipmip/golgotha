@@ -153,7 +153,10 @@ info "Pushing main bookmark"
 jj git push --bookmark main
 
 info "Creating and pushing tag ${TAG}"
-git tag "${TAG}" @-
+# Resolve the release commit's git SHA (jj's @- / the main bookmark); `git tag`
+# does not understand jj's `@-` revision syntax.
+REL_COMMIT="$(jj log --no-pager -r @- -T 'commit_id' --no-graph)"
+git tag "${TAG}" "${REL_COMMIT}"
 git push origin "${TAG}"
 
 info "Done. Tag ${TAG} pushed; GitHub Actions will build and publish the release."
