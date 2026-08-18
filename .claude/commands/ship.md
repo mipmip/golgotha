@@ -18,19 +18,27 @@ Do this in order; do not skip the gate:
    (`- [ ]` → `- [x]`). Do not stop until all tasks are complete. If genuinely
    blocked, stop and report — do not ship a partial change.
 
-3. **Ship (gated).** Run:
-   `bash scripts/ship-change.sh <change> "<commit subject>"`
-   This stages the tree, runs the gate (`nix flake check` — build + tests +
-   coverage ≥70% overall / ≥80% core), archives the change, commits as Pim Snel
-   with no self-promotion, and pushes `main`. Write a clear one-line commit
-   subject describing the change. If the gate fails, fix the code and re-run —
-   never bypass it.
+3. **Update the CHANGELOG.** Add a concise, user-facing bullet to the
+   `## [Unreleased]` section of `CHANGELOG.md`, under the right category —
+   `### Added` (new capability), `### Changed` (behavior/rename), `### Fixed`
+   (bug). Create the category subsection if it's missing. Keep it one or two
+   lines describing the change from a user's perspective (not the commit hash).
+   `release.sh` promotes this section to a version at release time. (Pure-internal
+   refactors with no user-visible effect may skip this — note that you did.)
 
-4. **Close the bean.** Mark the linked bean(s) completed with a
+4. **Ship (gated).** Run:
+   `bash scripts/ship-change.sh <change> "<commit subject>"`
+   This stages the tree (including the CHANGELOG edit), runs the gate
+   (`nix flake check` — build + tests + coverage ≥70% overall / ≥80% core),
+   archives the change, commits as Pim Snel with no self-promotion, and pushes
+   `main`. Write a clear one-line commit subject describing the change. If the
+   gate fails, fix the code and re-run — never bypass it.
+
+5. **Close the bean.** Mark the linked bean(s) completed with a
    `## Summary of Changes` section. If the bean is an epic whose parent
    milestone now has all epics completed, mark the milestone completed too.
 
-5. **Report.** Change archived name, commit id, coverage summary, bean(s) closed.
+6. **Report.** Change archived name, commit id, coverage summary, bean(s) closed.
 
 Rules: never skip the gate; commit as Pim Snel, no self-promotion; keep changes
 scoped to the one change.

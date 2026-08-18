@@ -9,12 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Multi-provider portfolio manager foundations: YAML config loading/validation,
+  configurable clone-path templating, GitHub/Codeberg/GitLab clients, per-provider
+  JSON cache, and a cron-friendly CLI sync (clone-missing + fast-forward-pull).
+- Owner/org auto-discovery via `all_owners` (with `exclude_owners`); eager sync,
+  lazy per-owner fetch in the TUI, over an owner-indexed cache.
+- TUI: provider → owner → repo browsing with a scrolling viewport and paging
+  keys, a position indicator, level-aware fuzzy filter, facet filters
+  (fork/archived/visibility), name/last-updated sorting, a repo detail view with
+  a glamour-rendered README, single/bulk clone, and open-in-browser.
+- Fetch progress: a shared event stream with a spinner then a determinate bar,
+  bounded-parallel page fetching, and cancellation.
 - Release process: `VERSION` single source of truth (embedded via `go:embed`,
-  read by the flake and overridden by goreleaser from the git tag).
-- goreleaser config building linux/amd64+arm64 and darwin/amd64+arm64 with
-  tar.gz archives and checksums.
-- GitHub Actions release workflow triggered on `v*` tag pushes.
-- `scripts/release.sh`: gated, interactive release (nix flake check gate,
-  vendorHash auto-update, jj-first commit + git tag push).
-- `RELEASING.md` maintainer documentation.
-- goreleaser and gum in the flake devShell.
+  read by the flake, overridden by goreleaser from the git tag); goreleaser
+  config (linux/darwin × amd64/arm64 with checksums); GitHub Actions release
+  workflow on `v*` tags; gated `scripts/release.sh`; `RELEASING.md`; goreleaser
+  and gum in the devShell.
+- Nix flake (plain, multi-arch) with a coverage gate (`scripts/coverage.sh`,
+  ≥70% overall / ≥80% core) enforced by `nix flake check`.
+
+### Changed
+
+- Renamed the project skull2 → golgotha → **HupHop** (binary `hup`); module
+  `github.com/mipmip/huphop`, config `~/.config/huphop`, cache `~/.cache/huphop`,
+  auth env prefix `HUPHOP_<PROVIDER>_TOKEN`.
+
+### Fixed
+
+- Lazy-fetched owner now displays its repositories immediately, without needing a
+  restart (the cache is committed before the completion event is handled).
