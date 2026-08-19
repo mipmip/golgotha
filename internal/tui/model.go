@@ -241,6 +241,11 @@ type Model struct {
 	// detailFetcher lazily fetches one repo's details+README and caches them,
 	// returning a detailLoadedMsg; nil disables lazy fetch (tests inject the msg).
 	detailFetcher func(ctx context.Context, p *config.Provider, r provider.Repo) tea.Cmd
+	// prefetchSeq debounces navigate-prefetch: each cursor move bumps it, and a
+	// scheduled prefetch only fires if its captured seq is still current.
+	prefetchSeq int
+	// prefetchCancel cancels the in-flight background detail prefetch, if any.
+	prefetchCancel context.CancelFunc
 
 	// checkCloned reports whether target already exists as a git repo. A var so
 	// tests can stub the filesystem check.

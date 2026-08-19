@@ -43,6 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Repository detail view opens faster: metadata and README are fetched
+  concurrently, and the highlighted repo's details are prefetched in the
+  background as you navigate, so opening is usually instant.
 - The TUI owner view no longer over-shows: selecting your own account now lists
   only your repositories instead of every repo for the provider.
 - You can now move the selection while typing a fuzzy filter (↑/↓, PgUp/PgDn,

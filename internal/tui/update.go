@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -116,6 +117,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case detailLoadedMsg:
 		return m.handleDetailLoaded(msg)
+
+	case prefetchTickMsg:
+		return m.handlePrefetchTick(msg)
 
 	case progressMsg:
 		return m.handleProgress(msg)
@@ -322,37 +326,37 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "up", "k":
 		m.moveCursor(-1)
-		return m, nil
+		return m, m.schedulePrefetch()
 
 	case "down", "j":
 		m.moveCursor(1)
-		return m, nil
+		return m, m.schedulePrefetch()
 
 	case "pgdown":
 		m.moveCursor(m.pageStep())
-		return m, nil
+		return m, m.schedulePrefetch()
 
 	case "pgup":
 		m.moveCursor(-m.pageStep())
-		return m, nil
+		return m, m.schedulePrefetch()
 
 	case "ctrl+d":
 		m.moveCursor(m.halfPageStep())
-		return m, nil
+		return m, m.schedulePrefetch()
 
 	case "ctrl+u":
 		m.moveCursor(-m.halfPageStep())
-		return m, nil
+		return m, m.schedulePrefetch()
 
 	case "home":
 		m.cursor = 0
 		m.clampCursor()
-		return m, nil
+		return m, m.schedulePrefetch()
 
 	case "end":
 		m.cursor = m.rowCount() - 1
 		m.clampCursor()
-		return m, nil
+		return m, m.schedulePrefetch()
 
 	case "/":
 		m.filtering = true
@@ -673,6 +677,41 @@ func (m *Model) openDetail() (tea.Model, tea.Cmd) {
 	m.detailLoading = true
 	m.status = fmt.Sprintf("loading %s...", it.key())
 	return m, m.detailFetcher(context.Background(), it.Provider, it.Repo)
+}
+
+// schedulePrefetch bumps the debounce sequence and returns a command that, after
+// prefetchDebounce, asks to prefetch the highlighted repo's details. It is a
+// no-op (nil) unless at the repos level with a detail fetcher configured.
+func (m *Model) schedulePrefetch() tea.Cmd {
+	if m.nav != levelRepos || m.detailFetcher == nil {
+		return nil
+	}
+	m.prefetchSeq++
+	seq := m.prefetchSeq
+	return tea.Tick(prefetchDebounce, func(time.Time) tea.Msg { return prefetchTickMsg{seq: seq} })
+}
+
+// handlePrefetchTick warms the highlighted repo's detail cache in the background
+// once the cursor has settled. It skips already-cached repos and cancels any
+// superseded in-flight prefetch. The fetch reuses detailFetcher, whose result is
+// ignored by handleDetailLoaded unless it matches the open detail view.
+func (m *Model) handlePrefetchTick(msg prefetchTickMsg) (tea.Model, tea.Cmd) {
+	if msg.seq != m.prefetchSeq || m.nav != levelRepos || m.detailFetcher == nil {
+		return m, nil // cursor moved again, or not applicable
+	}
+	it, ok := m.currentRepo()
+	if !ok {
+		return m, nil
+	}
+	if _, cached, err := cache.LoadDetailsOrEmpty(it.Provider.Name, it.Repo.Owner, it.Repo.Name); err == nil && cached {
+		return m, nil // already warm
+	}
+	if m.prefetchCancel != nil {
+		m.prefetchCancel() // supersede any in-flight prefetch
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	m.prefetchCancel = cancel
+	return m, m.detailFetcher(ctx, it.Provider, it.Repo)
 }
 
 // closeDetail returns from the detail view to the repo list at the prior

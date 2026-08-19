@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -64,6 +65,14 @@ type detailLoadedMsg struct {
 	Cached   bool
 	Err      error
 }
+
+// prefetchDebounce is how long the cursor must settle on a repo before its
+// details are prefetched in the background.
+const prefetchDebounce = 200 * time.Millisecond
+
+// prefetchTickMsg fires after the debounce; seq lets a stale tick be ignored
+// when the cursor has since moved.
+type prefetchTickMsg struct{ seq int }
 
 // progressMsg carries one fetch progress event plus the channel it came from so
 // the model can re-issue a wait for the next event, keeping Update pure.
@@ -282,21 +291,39 @@ func defaultOwnerFetcher(cfg *config.Config) func(ctx context.Context, p *config
 // tests (no network); tests set m.detailFetcher to nil or feed detailLoadedMsg.
 func defaultDetailFetcher(cfg *config.Config) func(ctx context.Context, p *config.Provider, r provider.Repo) tea.Cmd {
 	reg := provider.NewDefaultRegistry()
+	return detailFetcherWith(reg.Build)
+}
+
+// detailFetcherWith builds a detail fetcher from an injectable provider
+// constructor (the default uses the real registry; tests inject a fake). The two
+// requests run concurrently and a README failure is non-fatal.
+func detailFetcherWith(build func(*config.Provider) (provider.Provider, error)) func(ctx context.Context, p *config.Provider, r provider.Repo) tea.Cmd {
 	return func(ctx context.Context, p *config.Provider, r provider.Repo) tea.Cmd {
 		return func() tea.Msg {
 			msg := detailLoadedMsg{Provider: p.Name, Owner: r.Owner, Name: r.Name}
 
-			client, err := reg.Build(p)
+			client, err := build(p)
 			if err != nil {
 				return detailFallback(msg, err)
 			}
-			pd, derr := client.RepoDetails(ctx, r.Owner, r.Name)
+			// Fetch details and README concurrently to halve cold-open latency.
+			var (
+				pd         provider.Details
+				readme     string
+				derr, rerr error
+				wg         sync.WaitGroup
+			)
+			wg.Add(2)
+			go func() { defer wg.Done(); pd, derr = client.RepoDetails(ctx, r.Owner, r.Name) }()
+			go func() { defer wg.Done(); readme, rerr = client.Readme(ctx, r.Owner, r.Name) }()
+			wg.Wait()
+
 			if derr != nil {
 				return detailFallback(msg, derr)
 			}
-			readme, rerr := client.Readme(ctx, r.Owner, r.Name)
+			// A README failure is non-fatal: show the details with an empty README.
 			if rerr != nil {
-				return detailFallback(msg, rerr)
+				readme = ""
 			}
 
 			d, serr := cache.RefreshDetails(p.Name, r.Owner, r.Name, pd, readme, nowUTC())

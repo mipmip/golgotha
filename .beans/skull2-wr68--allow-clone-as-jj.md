@@ -1,11 +1,11 @@
 ---
 # skull2-wr68
 title: allow clone as jj
-status: in-progress
+status: completed
 type: task
 priority: normal
 created_at: 2026-08-18T09:28:59Z
-updated_at: 2026-08-19T21:55:11Z
+updated_at: 2026-08-19T22:27:59Z
 parent: skull2-ok4c
 ---
 
@@ -67,3 +67,18 @@ in config.example.yaml or the completeness gate (skull2-cqi8) fails.
 - syncer: jj colocated clone (plain + PTY-progress with ANSI-strip + NN% parse),
   branch clone on resolved vcs, jj-on-PATH guard; pty dependency + vendorHash.
 - tui: multiplex popup inherits it (git bar unchanged; jj bar via PTY path).
+
+
+
+## Summary of Changes
+
+Added clone-as-jj. Config: global `clone_vcs` + per-provider override + per-repo
+`vcs_rules` (path.Match globs on owner/name, first match wins), resolved by pure
+`Config.CloneVCSFor`; validation of vcs values + globs; example documented.
+Syncer: `cloneWith` branches on the resolved VCS across CloneRepo/CloneRepoProgress/
+syncRepo; jj path is `jj git clone --colocate` (colocated .git → sync unchanged);
+`ensureJJ` PATH guard. Progress path runs jj under a pty (creack/pty), strips
+ANSI, parses NN% (git bar unchanged). Added creack/pty dep + updated flake
+vendorHash; added jujutsu to the coverage check so the real jj-clone test runs.
+Coverage: syncer 82.8%, overall 80.3%. Shipped as 2026-08-19-add-jj-clone
+(commit 461f14b0).
