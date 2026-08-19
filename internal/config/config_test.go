@@ -190,6 +190,39 @@ providers:
 	if p.IncludeForks == nil || *p.IncludeForks != true {
 		t.Errorf("IncludeForks = %v, want true", p.IncludeForks)
 	}
+	if cfg.SearchStrategy != SearchFuzzy {
+		t.Errorf("SearchStrategy = %q, want %q", cfg.SearchStrategy, SearchFuzzy)
+	}
+}
+
+func TestSearchStrategyParsing(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	base := "providers:\n  - {name: gh, type: github, short: gh, username: me}\n"
+
+	t.Run("substring accepted", func(t *testing.T) {
+		cfg, err := Parse([]byte("search_strategy: substring\n" + base))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.SearchStrategy != SearchSubstring {
+			t.Errorf("SearchStrategy = %q, want %q", cfg.SearchStrategy, SearchSubstring)
+		}
+	})
+
+	t.Run("unknown rejected", func(t *testing.T) {
+		cfg, err := Parse([]byte("search_strategy: regex\n" + base))
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = cfg.Validate()
+		if err == nil {
+			t.Fatal("expected error for unknown search_strategy")
+		}
+		if !strings.Contains(err.Error(), "search_strategy") || !strings.Contains(err.Error(), "regex") {
+			t.Errorf("error = %q, want mention of search_strategy and the bad value", err)
+		}
+	})
 }
 
 func TestBaseDirTildeExpansion(t *testing.T) {

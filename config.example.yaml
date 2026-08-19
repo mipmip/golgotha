@@ -17,6 +17,12 @@ clone_pattern_tpl: "{{.BaseDir}}/{{.Short}}.{{.OwnerLower}}/{{.Repo}}"
 # per provider and per repo (see vcs_rules below). Requires `jj` on PATH.
 # clone_vcs: git
 
+# How a bare TUI filter term is matched: "fuzzy" (subsequence, default) or
+# "substring" (case-insensitive substring). The filter accepts fzf-style
+# operators regardless: 'exact  ^prefix  suffix$  !negate  space=AND  a|b=OR.
+# The "'" prefix always toggles a term to the opposite of this default.
+# search_strategy: fuzzy
+
 # TUI modes. Each mode sets its chrome (ordered `header`/`footer` element lists)
 # and any mode settings. Omit `modes` entirely to use the built-in management
 # mode (the standard layout). `default_mode` picks the mode when --mode is not

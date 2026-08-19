@@ -88,6 +88,9 @@ base_dir: ~/                       # root for all trees; default ~
 # Per-provider `clone_pattern_tpl` overrides this.
 clone_pattern_tpl: "{{.BaseDir}}/{{.Short}}.{{.OwnerLower}}/{{.Repo}}"
 
+# How a bare TUI filter term matches: fuzzy (subsequence, default) | substring.
+search_strategy: fuzzy
+
 providers:
   - name: github-personal          # unique key
     type: github                   # github | codeberg | gitlab
@@ -154,7 +157,10 @@ line-oriented logging; non-zero on failure).
 ## 9. TUI behaviour
 
 - Hierarchic navigation: **provider → owner/org → repos**.
-- Global **fuzzy filter** (`/`) across the flattened repo list.
+- Global **filter** (`/`) across the flattened repo list, using fzf-style
+  extended search: `'exact`, `^prefix`, `suffix$`, `!negate`, space = AND,
+  `a | b` = OR. `search_strategy` (`fuzzy` default, or `substring`) sets what a
+  bare term means; `'` toggles a term to the opposite.
 - **Single select** → clone to configured target pattern.
 - **Multi select** (space) → bulk clone.
 - **Open in browser** (`o`) → provider `web_url` for the repo.

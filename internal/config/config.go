@@ -32,6 +32,14 @@ const (
 	ProtocolHTTPS = "https"
 )
 
+// Search strategies select how a bare (unanchored) TUI filter term is matched.
+const (
+	// SearchFuzzy matches a bare term as a subsequence (the default).
+	SearchFuzzy = "fuzzy"
+	// SearchSubstring matches a bare term as a case-insensitive substring.
+	SearchSubstring = "substring"
+)
+
 // Config is the top-level huphop configuration parsed from config.yaml.
 type Config struct {
 	// BaseDir is the root under which all trees are created. Tilde-expanded to
@@ -51,6 +59,10 @@ type Config struct {
 	Modes map[string]ModeConfig `yaml:"modes"`
 	// Providers is the configured list of git providers.
 	Providers []Provider `yaml:"providers"`
+	// SearchStrategy selects how a bare (unanchored) TUI filter term is matched:
+	// "fuzzy" (subsequence) or "substring" (case-insensitive substring). Defaults
+	// to "fuzzy". The filter's "'" prefix always toggles a term to the opposite.
+	SearchStrategy string `yaml:"search_strategy"`
 }
 
 // TUI modes and the placeable chrome-element vocabulary.
@@ -330,6 +342,9 @@ func (c *Config) applyDefaults() error {
 	if c.DefaultMode == "" {
 		c.DefaultMode = ModeManagement
 	}
+	if c.SearchStrategy == "" {
+		c.SearchStrategy = SearchFuzzy
+	}
 	if len(c.Modes) == 0 {
 		// Built-in management mode reproducing the standard layout.
 		c.Modes = map[string]ModeConfig{
@@ -422,6 +437,12 @@ func (c *Config) Validate() error {
 
 	if err := validCloneVCS(c.CloneVCS, true); err != nil {
 		return fmt.Errorf("clone_vcs: %w", err)
+	}
+
+	switch c.SearchStrategy {
+	case "", SearchFuzzy, SearchSubstring:
+	default:
+		return fmt.Errorf("search_strategy %q is invalid (want %q or %q)", c.SearchStrategy, SearchFuzzy, SearchSubstring)
 	}
 
 	if c.DefaultMode != "" && len(c.Modes) > 0 {

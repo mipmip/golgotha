@@ -276,7 +276,7 @@ func New(cfg *config.Config) *Model {
 	}
 
 	m.filter = textinput.New()
-	m.filter.Placeholder = "fuzzy filter (owner/name)"
+	m.filter.Placeholder = "filter — 'exact ^prefix suffix$ !not (owner/name)"
 	m.filter.Prompt = "/ "
 
 	m.spinner = spinner.New()
@@ -475,17 +475,25 @@ func (m *Model) ownersFor(p *config.Provider) []string {
 	return pinSelfFirst(owners, p.Username)
 }
 
-// filtered returns the subset of items whose value fuzzy-matches the active
-// filter query, using match to derive the string matched against for each item.
-// An empty query returns the input unchanged. It keeps windowing/rendering
-// uniform across levels by centralizing the per-level narrowing.
-func filtered[T any](items []T, query string, match func(T) string) []T {
-	if query == "" {
-		return items
+// searchMatcher compiles the active filter query into a matcher using the
+// configured search strategy. An empty query yields a matcher that matches
+// everything; a nil config falls back to the fuzzy default.
+func (m *Model) searchMatcher(query string) matcher {
+	strategy := searchFuzzy
+	if m.cfg != nil {
+		strategy = m.cfg.SearchStrategy
 	}
+	return compileQuery(query, strategy)
+}
+
+// filtered returns the subset of items whose derived value matches mtr, using
+// match to derive the string matched against for each item. It keeps
+// windowing/rendering uniform across levels by centralizing the per-level
+// narrowing.
+func filtered[T any](items []T, mtr matcher, match func(T) string) []T {
 	out := make([]T, 0, len(items))
 	for _, it := range items {
-		if fuzzyMatch(match(it), query) {
+		if mtr.match(match(it)) {
 			out = append(out, it)
 		}
 	}
@@ -493,19 +501,19 @@ func filtered[T any](items []T, query string, match func(T) string) []T {
 }
 
 // visibleProviders returns the provider names for the providers level, narrowed
-// by the active fuzzy filter (matched against the raw provider name).
+// by the active filter (matched against the raw provider name).
 func (m *Model) visibleProviders() []string {
-	return filtered(m.providerNames(), m.filter.Value(), func(s string) string { return s })
+	return filtered(m.providerNames(), m.searchMatcher(m.filter.Value()), func(s string) string { return s })
 }
 
 // visibleOwners returns the owner names for the selected provider, narrowed by
-// the active fuzzy filter. Matching is against the raw owner name, not any
+// the active filter. Matching is against the raw owner name, not any
 // decorated display label (e.g. "(not fetched)").
 func (m *Model) visibleOwners() []string {
 	if m.selProvider == nil {
 		return nil
 	}
-	return filtered(m.ownersFor(m.selProvider), m.filter.Value(), func(s string) string { return s })
+	return filtered(m.ownersFor(m.selProvider), m.searchMatcher(m.filter.Value()), func(s string) string { return s })
 }
 
 // visibleRepos returns the repo items visible at the current scope. When the
@@ -545,15 +553,16 @@ func (m *Model) visibleRepos() []repoItem {
 	}
 
 	if query != "" {
+		mtr := m.searchMatcher(query)
 		out := scope[:0:0]
 		for _, it := range scope {
 			match := it.key()
 			if m.flatAll && it.Provider != nil {
-				// Let the provider short participate in fuzzy matching so users
-				// can filter the combined list by provider (e.g. "gh").
+				// Let the provider short participate in matching so users can
+				// filter the combined list by provider (e.g. "gh").
 				match = it.Provider.Short + " " + match
 			}
-			if fuzzyMatch(match, query) {
+			if mtr.match(match) {
 				out = append(out, it)
 			}
 		}

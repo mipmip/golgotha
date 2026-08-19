@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- TUI filter now understands fzf-style extended search: `'exact`, `^prefix`,
+  `suffix$`, `!negate`, space for AND, and `a | b` for OR. The new
+  `search_strategy` config key (`fuzzy` default, or `substring`) sets what a
+  bare term means, and a `'` prefix toggles a term to the opposite — so
+  searching `nivis` in `substring` mode returns only literal matches.
+
 ## [1.1.0] - 2026-08-20
 
 ### Added
