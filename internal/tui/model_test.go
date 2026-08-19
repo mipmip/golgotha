@@ -118,12 +118,13 @@ func TestCursorMovementClamps(t *testing.T) {
 	if m.cursor != 1 {
 		t.Fatalf("expected cursor 1, got %d", m.cursor)
 	}
-	// move past end
+	// move past end: clamps to the last row, which is the synthetic
+	// "All repositories" entry appended after the providers.
 	for i := 0; i < 10; i++ {
 		send(m, key("j"))
 	}
-	if m.cursor != len(m.providers)-1 {
-		t.Fatalf("cursor should clamp to last provider, got %d", m.cursor)
+	if m.cursor != len(m.providers) {
+		t.Fatalf("cursor should clamp to the all-repos entry, got %d", m.cursor)
 	}
 }
 

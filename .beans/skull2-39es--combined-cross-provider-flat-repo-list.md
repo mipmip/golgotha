@@ -1,11 +1,11 @@
 ---
 # skull2-39es
 title: Combined cross-provider flat repo list
-status: draft
+status: in-progress
 type: feature
 priority: normal
 created_at: 2026-08-19T12:52:56Z
-updated_at: 2026-08-19T14:56:28Z
+updated_at: 2026-08-19T19:13:43Z
 parent: skull2-ok4c
 ---
 

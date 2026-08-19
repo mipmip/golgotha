@@ -137,6 +137,9 @@ type Model struct {
 	// mode is the active TUI mode name (management, multiplex, ...). Empty falls
 	// back to the built-in management chrome.
 	mode string
+	// flatAll is true in the combined "All repositories" view: a flat list of
+	// every cached repo across all providers and owners (selProvider is nil).
+	flatAll bool
 	// runCommand executes a multiplex switch_command's argv (no shell). Injectable
 	// for tests; defaults to running the process.
 	runCommand func(argv []string) error
@@ -526,7 +529,13 @@ func (m *Model) visibleRepos() []repoItem {
 	if query != "" {
 		out := scope[:0:0]
 		for _, it := range scope {
-			if fuzzyMatch(it.key(), query) {
+			match := it.key()
+			if m.flatAll && it.Provider != nil {
+				// Let the provider short participate in fuzzy matching so users
+				// can filter the combined list by provider (e.g. "gh").
+				match = it.Provider.Short + " " + match
+			}
+			if fuzzyMatch(match, query) {
 				out = append(out, it)
 			}
 		}
@@ -567,12 +576,53 @@ func (m *Model) sortRepos(items []repoItem) []repoItem {
 	return items
 }
 
+// allReposLabel is the synthetic top-of-providers entry that opens the combined
+// cross-provider flat repository view.
+const allReposLabel = "All repositories"
+
+// providerRows returns the rows shown at the providers level: the fuzzy-filtered
+// provider names followed by the synthetic "All repositories" entry.
+func (m *Model) providerRows() []string {
+	provs := m.visibleProviders()
+	rows := make([]string, 0, len(provs)+1)
+	rows = append(rows, provs...)
+	rows = append(rows, allReposLabel)
+	return rows
+}
+
+// combinedBadge summarizes the combined view: total cached repos and how many
+// owners are loaded out of the total known owners across all providers.
+func (m *Model) combinedBadge() string {
+	repos := 0
+	for _, p := range m.providers {
+		repos += len(m.reposByProvider[p.Name])
+	}
+	total, loaded := 0, 0
+	for _, p := range m.providers {
+		owners := m.ownersFor(p)
+		total += len(owners)
+		for _, o := range owners {
+			if m.fetchedOwners[p.Name][o] {
+				loaded++
+			}
+		}
+	}
+	if total == 0 {
+		return fmt.Sprintf("%d repos", repos)
+	}
+	badge := fmt.Sprintf("%d repos · %d/%d owners loaded", repos, loaded, total)
+	if loaded < total {
+		badge += " (r: refresh all)"
+	}
+	return badge
+}
+
 // rowCount returns the number of rows shown at the current level, honoring the
 // active fuzzy filter which narrows the current level's items.
 func (m *Model) rowCount() int {
 	switch m.nav {
 	case levelProviders:
-		return len(m.visibleProviders())
+		return len(m.providerRows())
 	case levelOwners:
 		return len(m.visibleOwners())
 	default:

@@ -58,6 +58,9 @@ func (m *Model) View() string {
 // headerText renders the breadcrumb / title for the current scope.
 func (m *Model) headerText() string {
 	crumb := "hup"
+	if m.flatAll {
+		return crumb + " > all repositories · " + m.combinedBadge()
+	}
 	if m.selProvider != nil {
 		crumb += " > " + m.selProvider.Name
 	}
@@ -73,7 +76,7 @@ func (m *Model) headerText() string {
 func (m *Model) bodyText() string {
 	switch m.nav {
 	case levelProviders:
-		return m.renderStrings(m.visibleProviders())
+		return m.renderStrings(m.providerRows())
 	case levelOwners:
 		owners := m.visibleOwners()
 		labels := make([]string, len(owners))
@@ -174,7 +177,12 @@ func (m *Model) renderRepos(rows []repoItem) string {
 		if it.Cloned {
 			cloned = "*"
 		}
-		line := fmt.Sprintf("%s %s %s", mark, cloned, it.key())
+		label := it.key()
+		if m.flatAll && it.Provider != nil {
+			// Disambiguate across providers in the combined view.
+			label = it.Provider.Short + "  " + label
+		}
+		line := fmt.Sprintf("%s %s %s", mark, cloned, label)
 		if i == m.cursor {
 			line = cursorStyle.Render(line)
 		} else if it.Selected {

@@ -1,11 +1,11 @@
 ---
 # skull2-wzbf
 title: tui-modes with new multiplexer mode
-status: in-progress
+status: completed
 type: feature
 priority: normal
 created_at: 2026-08-19T11:37:59Z
-updated_at: 2026-08-19T19:01:25Z
+updated_at: 2026-08-19T19:12:59Z
 parent: skull2-ok4c
 ---
 
@@ -92,3 +92,19 @@ Open: after switch, TUI stays vs quits (tmux switch-client leaves the pane).
   (sequence after it). Depends on nothing else.
 - Still large for one change; the chrome-system vs command-execution seam is the
   natural internal split if it ever needs breaking up.
+
+
+
+## Summary of Changes
+
+Added TUI modes. Config: `default_mode` + `modes:` map (ModeConfig{Header,
+Footer, SwitchCommand}); built-in management mode when omitted; validation of
+mode/element names, per-mode dupes, and multiplex requiring switch_command.
+TUI: element registry (mode.go) rendering per-mode header/footer slots;
+view.go/chrome() refactored to derive from the active mode (management output
+unchanged); `--mode` flag. Multiplex primary action clones-if-needed then runs
+a switch_command rendered with clone-path fields + {{.Target}}, split via
+POSIX-ish shell-words rules and executed without a shell (injection-safe);
+clone failure aborts the switch. Absorbed configurable-tui-chrome (rkyi
+scrapped). No new deps (hand-written splitter). Coverage overall 81.2%.
+Shipped as 2026-08-19-add-tui-modes (commit 4b93fc83).

@@ -440,6 +440,15 @@ func (m *Model) goBack() (tea.Model, tea.Cmd) {
 		if m.fetchingOwner != "" {
 			m.cancelFetch()
 		}
+		if m.flatAll {
+			// Combined view backs out to the providers level.
+			m.flatAll = false
+			m.selProvider = nil
+			m.nav = levelProviders
+			m.cursor = 0
+			m.offset = 0
+			break
+		}
 		m.nav = levelOwners
 		m.selOwner = ""
 		m.cursor = 0
@@ -461,15 +470,28 @@ func (m *Model) goBack() (tea.Model, tea.Cmd) {
 func (m *Model) enter() (tea.Model, tea.Cmd) {
 	switch m.nav {
 	case levelProviders:
-		providers := m.visibleProviders()
-		if m.cursor >= 0 && m.cursor < len(providers) {
-			m.selProvider = m.providerByName(providers[m.cursor])
-			m.nav = levelOwners
+		rows := m.providerRows()
+		if m.cursor < 0 || m.cursor >= len(rows) {
+			return m, nil
+		}
+		if rows[m.cursor] == allReposLabel {
+			// "All repositories": enter the combined flat view.
+			m.flatAll = true
+			m.selProvider = nil
+			m.selOwner = ""
+			m.nav = levelRepos
 			m.clearFilter()
 			m.cursor = 0
 			m.offset = 0
 			m.clampCursor()
+			return m, nil
 		}
+		m.selProvider = m.providerByName(rows[m.cursor])
+		m.nav = levelOwners
+		m.clearFilter()
+		m.cursor = 0
+		m.offset = 0
+		m.clampCursor()
 	case levelOwners:
 		owners := m.visibleOwners()
 		if m.cursor >= 0 && m.cursor < len(owners) {
@@ -765,6 +787,23 @@ func (m *Model) cancelFetch() {
 // or highlighted provider. It is a no-op when the relevant seam is disabled
 // (tests) or nothing is selected.
 func (m *Model) refresh() (tea.Model, tea.Cmd) {
+	// In the combined view, `r` does a full refresh across every provider,
+	// re-fetching all owners so the overview becomes complete and current.
+	if m.flatAll {
+		if m.refresher == nil {
+			return m, nil
+		}
+		var cmds []tea.Cmd
+		for _, p := range m.providers {
+			cmds = append(cmds, m.refresher(context.Background(), p))
+		}
+		if len(cmds) == 0 {
+			return m, nil
+		}
+		m.status = "refreshing all providers..."
+		return m, tea.Batch(cmds...)
+	}
+
 	// At the repos level, `r` re-fetches the current owner (the level-aware
 	// filter only narrows this owner's repos, so it stays the current owner).
 	if m.nav == levelRepos && m.selProvider != nil {

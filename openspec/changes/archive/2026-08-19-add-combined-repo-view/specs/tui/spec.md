@@ -3,16 +3,15 @@
 ### Requirement: Combined all-repositories view
 
 The TUI SHALL provide a combined, cross-provider view that lists every cached
-repository across all providers and owners in one flat list, reachable from a
-top-level "All repositories" entry. The view SHALL reuse the existing repository
+repository across all providers and owners in one flat list, reachable from an
+"All repositories" entry in the provider list. The view SHALL reuse the existing repository
 row behavior (fuzzy filter, facet filters, sort, single and bulk clone, and
 detail) applied across the whole set. Leaving the view SHALL return to the
 provider list.
 
-#### Scenario: Enter the combined view from the top
+#### Scenario: Enter the combined view
 
-- **WHEN** the user selects the "All repositories" entry at the top of the
-  provider list
+- **WHEN** the user selects the "All repositories" entry in the provider list
 - **THEN** the TUI shows a flat list of every cached repository across all
   providers and owners, and back/Esc returns to the provider list
 
@@ -64,8 +63,8 @@ the overview complete and current.
 - **THEN** the TUI re-fetches every owner across every provider, shows progress
   while doing so, and updates the combined list and the cache on completion
 
-#### Scenario: Cancel leaves existing cache intact
+#### Scenario: Per-provider refresh is atomic
 
-- **WHEN** the user cancels an in-progress combined refresh
-- **THEN** the fetch stops and previously cached repositories remain available in
-  the view
+- **WHEN** a provider's refresh during a combined refresh fails or is interrupted
+- **THEN** that provider's previously cached repositories remain intact (each
+  provider commits only on a complete refresh)

@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   selecting a repo, clones it if needed then runs a templated, shell-safe
   `switch_command` (clone-path fields plus `{{.Target}}`) — e.g. jump to a tmux
   session at the checkout.
+- Combined "All repositories" view: an entry in the provider list opens a flat,
+  cross-provider list of every cached repo (provider-prefixed rows, a
+  completeness badge, and a full cross-provider refresh), with the existing
+  fuzzy filter, facets, sort, and clone/detail actions applied across the set.
 
 ### Changed
 
