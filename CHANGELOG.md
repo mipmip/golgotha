@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   session at the checkout.
 - `hup tui --flatlist` starts directly in the combined flat repo list; combine
   with `--mode multiplex` to fuzzy-find any repo and jump to it in one command.
+- Clone repos with Jujutsu: set `clone_vcs: jj` (global, per-provider, or per-repo
+  via `vcs_rules`) to clone colocated with `jj git clone --colocate` (a real
+  `.git` remains, so sync still works). Requires `jj` on PATH.
 - Combined "All repositories" view: an entry in the provider list opens a flat,
   cross-provider list of every cached repo (provider-prefixed rows, a
   completeness badge, and a full cross-provider refresh), with the existing

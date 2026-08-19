@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -38,6 +39,9 @@ type Config struct {
 	BaseDir string `yaml:"base_dir"`
 	// ClonePatternTpl is the global default clone-path template.
 	ClonePatternTpl string `yaml:"clone_pattern_tpl"`
+	// CloneVCS is the global default version-control tool used to clone repos
+	// ("git" or "jj"); empty means git. Overridable per provider and per repo.
+	CloneVCS string `yaml:"clone_vcs"`
 	// DefaultMode is the TUI mode used when --mode is not given. Defaults to
 	// "management".
 	DefaultMode string `yaml:"default_mode"`
@@ -68,6 +72,23 @@ var KnownElements = map[string]bool{
 	"position_indicator": true,
 	"switch_hint":        true,
 	"clone_status":       true,
+}
+
+// Clone version-control tools.
+const (
+	// VCSGit clones with git (the default).
+	VCSGit = "git"
+	// VCSJJ clones with `jj git clone --colocate`.
+	VCSJJ = "jj"
+)
+
+// VCSRule is a per-repo clone-VCS override: repos whose "owner/name" matches the
+// glob Match are cloned with VCS. Match uses path.Match semantics.
+type VCSRule struct {
+	// Match is a path.Match glob against "owner/name" (e.g. "mipmip/*").
+	Match string `yaml:"match"`
+	// VCS is the tool to use for matching repos ("git" or "jj").
+	VCS string `yaml:"vcs"`
 }
 
 // ModeConfig is a single TUI mode: ordered header/footer element slots plus any
@@ -104,6 +125,10 @@ type Provider struct {
 	CloneProtocol string `yaml:"clone_protocol"`
 	// ClonePatternTpl optionally overrides the global clone-path template.
 	ClonePatternTpl string `yaml:"clone_pattern_tpl"`
+	// CloneVCS overrides the global clone VCS for this provider ("git" or "jj").
+	CloneVCS string `yaml:"clone_vcs"`
+	// VCSRules are per-repo clone-VCS overrides (first matching rule wins).
+	VCSRules []VCSRule `yaml:"vcs_rules"`
 	// Auth describes how to obtain a credential for this provider.
 	Auth Auth `yaml:"auth"`
 	// Owners is an optional allow-list of owners/orgs; empty = all accessible.
@@ -119,6 +144,26 @@ type Provider struct {
 	IncludeArchived *bool `yaml:"include_archived"`
 	// IncludeForks controls whether fork repos are listed; default true.
 	IncludeForks *bool `yaml:"include_forks"`
+}
+
+// CloneVCSFor resolves the version-control tool used to clone a repository:
+// the first matching provider VCSRule (glob on "owner/name"), else the
+// provider's CloneVCS, else the global CloneVCS, else "git". It is pure.
+func (c *Config) CloneVCSFor(p *Provider, ownerName string) string {
+	if p != nil {
+		for _, rule := range p.VCSRules {
+			if ok, _ := path.Match(rule.Match, ownerName); ok {
+				return rule.VCS
+			}
+		}
+		if p.CloneVCS != "" {
+			return p.CloneVCS
+		}
+	}
+	if c.CloneVCS != "" {
+		return c.CloneVCS
+	}
+	return VCSGit
 }
 
 // ResolveOwners computes the effective owner set for a provider given the
@@ -362,6 +407,21 @@ func (c *Config) Validate() error {
 		if p.Username == "" {
 			return fmt.Errorf("provider %q: missing required field \"username\"", p.Name)
 		}
+		if err := validCloneVCS(p.CloneVCS, true); err != nil {
+			return fmt.Errorf("provider %q: clone_vcs: %w", p.Name, err)
+		}
+		for _, rule := range p.VCSRules {
+			if _, err := path.Match(rule.Match, "a/b"); err != nil {
+				return fmt.Errorf("provider %q: vcs_rules: invalid match %q: %w", p.Name, rule.Match, err)
+			}
+			if err := validCloneVCS(rule.VCS, false); err != nil {
+				return fmt.Errorf("provider %q: vcs_rules match %q: %w", p.Name, rule.Match, err)
+			}
+		}
+	}
+
+	if err := validCloneVCS(c.CloneVCS, true); err != nil {
+		return fmt.Errorf("clone_vcs: %w", err)
 	}
 
 	if c.DefaultMode != "" && len(c.Modes) > 0 {
@@ -385,6 +445,21 @@ func (c *Config) Validate() error {
 		if name == ModeMultiplex && mode.SwitchCommand == "" {
 			return fmt.Errorf("mode %q: missing required field \"switch_command\"", name)
 		}
+	}
+	return nil
+}
+
+// validCloneVCS checks a clone-VCS value. When allowEmpty is true an empty value
+// (meaning "inherit / default git") is accepted.
+func validCloneVCS(v string, allowEmpty bool) error {
+	if v == "" {
+		if allowEmpty {
+			return nil
+		}
+		return fmt.Errorf("vcs is required (want %q or %q)", VCSGit, VCSJJ)
+	}
+	if v != VCSGit && v != VCSJJ {
+		return fmt.Errorf("unknown vcs %q (want %q or %q)", v, VCSGit, VCSJJ)
 	}
 	return nil
 }

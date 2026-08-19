@@ -26,7 +26,7 @@
           inherit version;
           src = self;
           # Update when Go dependencies change; nix reports the expected hash.
-          vendorHash = "sha256-O8m7D4AXhKhob7+E9AUpfNQ2By188sdaLjPCVYie4tE=";
+          vendorHash = "sha256-hN/YWgfUfYgtPbL8YwLcDMyldyJDTGyjTqjVom6sQds=";
           subPackages = [ "cmd/hup" ];
           # Tests run in the dedicated `gotest` check (which provides git).
           doCheck = false;
@@ -62,8 +62,9 @@
         coverage = self.packages.${pkgs.system}.default.overrideAttrs (old: {
           pname = "hup-coverage";
           doCheck = true;
-          # Sync/e2e tests shell out to git against local temp repos.
-          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.git pkgs.bash ];
+          # Sync/e2e tests shell out to git (and jj for the jj-clone path)
+          # against local temp repos.
+          nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.git pkgs.bash pkgs.jujutsu ];
           preCheck = ''
             export HOME=$(mktemp -d)
             git config --global user.email test@huphop.invalid

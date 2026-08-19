@@ -84,11 +84,42 @@ type Engine struct {
 	Git Git
 	// Cfg is the loaded configuration (base dir, templates).
 	Cfg *config.Config
+	// JJClone clones url into dir with jj (colocated). emit reports progress
+	// (fraction 0..1, phase) and may be nil. Injectable for tests; defaults to
+	// shelling out to `jj git clone --colocate`.
+	JJClone func(ctx context.Context, url, dir string, emit func(frac float64, phase string)) error
 }
 
 // NewEngine builds an Engine with the given git runner and configuration.
 func NewEngine(g Git, cfg *config.Config) *Engine {
-	return &Engine{Git: g, Cfg: cfg}
+	return &Engine{Git: g, Cfg: cfg, JJClone: execJJClone}
+}
+
+// cloneVCSFor resolves the clone VCS for a repo, tolerating a nil config.
+func (e *Engine) cloneVCSFor(p *config.Provider, r provider.Repo) string {
+	if e.Cfg == nil {
+		return config.VCSGit
+	}
+	return e.Cfg.CloneVCSFor(p, r.Owner+"/"+r.Name)
+}
+
+// cloneWith clones url into dir using the resolved VCS: jj (colocated, optional
+// progress via emit) or git (using the progress-emitting clone when emit is set
+// and available).
+func (e *Engine) cloneWith(ctx context.Context, vcs, url, dir string, emit func(frac float64, phase string)) error {
+	if vcs == config.VCSJJ {
+		clone := e.JJClone
+		if clone == nil {
+			clone = execJJClone
+		}
+		return clone(ctx, url, dir, emit)
+	}
+	if emit != nil {
+		if pg, ok := e.Git.(ProgressGit); ok {
+			return pg.CloneProgress(ctx, url, dir, emit)
+		}
+	}
+	return e.Git.Clone(ctx, url, dir)
 }
 
 // CloneRepo clones a single repository for provider p to its templated target
@@ -120,7 +151,7 @@ func (e *Engine) CloneRepo(ctx context.Context, p *config.Provider, r provider.R
 		res.Err = fmt.Errorf("no %s clone URL for %s/%s", p.CloneProtocol, r.Owner, r.Name)
 		return res
 	}
-	if err := e.Git.Clone(ctx, url, target); err != nil {
+	if err := e.cloneWith(ctx, e.cloneVCSFor(p, r), url, target, nil); err != nil {
 		res.Action = ActionFailed
 		res.Err = fmt.Errorf("cloning %s: %w", url, err)
 		return res
@@ -162,11 +193,7 @@ func (e *Engine) CloneRepoProgress(ctx context.Context, p *config.Provider, r pr
 		return res
 	}
 
-	if pg, ok := e.Git.(ProgressGit); ok {
-		err = pg.CloneProgress(ctx, url, target, emit)
-	} else {
-		err = e.Git.Clone(ctx, url, target)
-	}
+	err = e.cloneWith(ctx, e.cloneVCSFor(p, r), url, target, emit)
 	if err != nil {
 		res.Action = ActionFailed
 		res.Err = fmt.Errorf("cloning %s: %w", url, err)
@@ -226,7 +253,7 @@ func (e *Engine) syncRepo(ctx context.Context, p *config.Provider, r provider.Re
 			res.Err = fmt.Errorf("no %s clone URL for %s/%s", p.CloneProtocol, r.Owner, r.Name)
 			return res
 		}
-		if err := e.Git.Clone(ctx, url, target); err != nil {
+		if err := e.cloneWith(ctx, e.cloneVCSFor(p, r), url, target, nil); err != nil {
 			res.Action = ActionFailed
 			res.Err = fmt.Errorf("cloning %s: %w", url, err)
 			return res

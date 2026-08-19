@@ -12,6 +12,11 @@ base_dir: ~
 # Fields: .BaseDir .Provider .Type .Short .Host .Owner .OwnerLower .Repo .RepoLower
 clone_pattern_tpl: "{{.BaseDir}}/{{.Short}}.{{.OwnerLower}}/{{.Repo}}"
 
+# Version control used to clone: git (default) or jj. jj uses
+# `jj git clone --colocate` (keeps a real .git so sync still works). Overridable
+# per provider and per repo (see vcs_rules below). Requires `jj` on PATH.
+# clone_vcs: git
+
 # TUI modes. Each mode sets its chrome (ordered `header`/`footer` element lists)
 # and any mode settings. Omit `modes` entirely to use the built-in management
 # mode (the standard layout). `default_mode` picks the mode when --mode is not
@@ -46,6 +51,14 @@ providers:
     web_url: https://github.com
     # api_url: https://api.github.com   # default; override for GitHub Enterprise
     clone_protocol: ssh          # ssh | https
+    # clone_vcs: jj              # per-provider override of the global clone_vcs
+    # vcs_rules: per-repo clone-VCS overrides; first match wins. `match` is a
+    # glob (path.Match) against "owner/name"; `vcs` is git or jj.
+    # vcs_rules:
+    #   - match: "mipmip/dotfiles"
+    #     vcs: jj
+    #   - match: "mipmip/*"
+    #     vcs: jj
     auth:
       cli: gh                    # reuse the `gh` CLI token when available
       env: HUPHOP_GITHUB_TOKEN   # PAT fallback for headless/cron use
