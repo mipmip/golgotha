@@ -92,6 +92,7 @@ providers:
   - name: github-personal          # unique key
     type: github                   # github | codeberg | gitlab
     short: gh                       # path prefix
+    username: mipmip                # REQUIRED: your own login on this provider
     api_url: https://api.github.com # override for GHE
     web_url: https://github.com     # for "open in browser"
     clone_protocol: ssh             # ssh | https
@@ -99,8 +100,7 @@ providers:
     auth:
       cli: gh                       # reuse this CLI's token when present
       env: HUPHOP_GITHUB_TOKEN      # PAT fallback (headless/cron)
-    owners:                         # optional allow-list; empty = all accessible
-      - mipmip
+    owners:                         # optional orgs; empty = your own account (username)
       - TechNative-B-V
     include_archived: false         # skip archived repos by default
     include_forks: true

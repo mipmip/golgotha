@@ -80,7 +80,8 @@ func (c *Cache) UnmarshalJSON(data []byte) error {
 // SetOwners replaces the owner index with the discovered owner names, preserving
 // existing per-owner fetch timestamps for owners that are still present, and
 // records DiscoveredAt. Owners no longer present are dropped along with their
-// repos. Passing the config.SelfOwner sentinel ("") is supported.
+// repos. Owner names are real logins (the self account is the configured
+// Username), so no sentinel handling is required.
 func (c *Cache) SetOwners(discoveredAt time.Time, names []string) {
 	prev := make(map[string]*time.Time, len(c.Owners))
 	for _, o := range c.Owners {

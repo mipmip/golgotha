@@ -83,7 +83,7 @@ type Provider interface {
 	ListRepos(ctx context.Context, owners []string) ([]Repo, error)
 	// ListOwners discovers the organizations/groups the authenticated user
 	// belongs to, mapped to the same owner strings ListRepos accepts. It does
-	// NOT include the user's own account (that is the SelfOwner sentinel added
+	// NOT include the user's own account (that is the configured Username, added
 	// by config.ResolveOwners).
 	ListOwners(ctx context.Context) ([]string, error)
 	// RepoDetails fetches a single repository's extended details (stars, topics,

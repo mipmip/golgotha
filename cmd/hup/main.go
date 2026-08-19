@@ -185,7 +185,7 @@ func refreshProviders(ctx context.Context, selected []*config.Provider) error {
 func refreshExplicitOwners(ctx context.Context, client provider.Provider, p *config.Provider, printer *cliProgressPrinter) error {
 	owners := p.Owners
 	if len(owners) == 0 {
-		owners = []string{config.SelfOwner}
+		owners = []string{p.Username}
 	}
 
 	results := fetchOwnersProgress(ctx, client, p, owners, printer)
@@ -246,7 +246,7 @@ func refreshAllOwners(ctx context.Context, client provider.Provider, p *config.P
 		if r.Err != nil {
 			// Commit-only-on-complete: a failed/canceled owner is left unfetched.
 			if firstErr == nil {
-				firstErr = fmt.Errorf("listing repos for owner %q: %w", displayOwner(r.Owner), r.Err)
+				firstErr = fmt.Errorf("listing repos for owner %q: %w", r.Owner, r.Err)
 			}
 			continue
 		}
@@ -259,14 +259,6 @@ func refreshAllOwners(ctx context.Context, client provider.Provider, p *config.P
 	}
 	fmt.Printf("%s: %d owners, %d repos\n", p.Name, len(owners), total)
 	return firstErr
-}
-
-// displayOwner renders the SelfOwner sentinel for logs.
-func displayOwner(owner string) string {
-	if owner == config.SelfOwner {
-		return "(self)"
-	}
-	return owner
 }
 
 // runRefresh handles the `refresh` subcommand: re-fetch repositories from each

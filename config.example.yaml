@@ -17,22 +17,26 @@ providers:
   - name: github-mipmip
     type: github
     short: gh
+    # username: your own login on this provider (REQUIRED). It identifies your
+    # own account: it is fetched via the authenticated-user endpoint (private
+    # repos included) and behaves like an ordinary owner in the TUI (pinned
+    # first, tinted).
+    username: mipmip
     web_url: https://github.com
     # api_url: https://api.github.com   # default; override for GitHub Enterprise
     clone_protocol: ssh          # ssh | https
     auth:
       cli: gh                    # reuse the `gh` CLI token when available
       env: HUPHOP_GITHUB_TOKEN   # PAT fallback for headless/cron use
-    # NOTE: leave `owners` unset to list YOUR OWN repositories
-    # (the authenticated user). Only list `owners` for organizations —
-    # each entry is fetched via /orgs/<owner>/repos, which does not work
-    # for a personal user account.
+    # NOTE: leave `owners` unset to list YOUR OWN repositories (your `username`).
+    # List `owners` to name organizations instead — each org entry is fetched via
+    # /orgs/<owner>/repos.
     #
     # owners:
     #   - TechNative-B-V
     #
-    # all_owners: discover every org you belong to automatically (plus your
-    # own account) instead of naming each in `owners`. Default false.
+    # all_owners: discover every org you belong to automatically (plus your own
+    # account, `username`) instead of naming each in `owners`. Default false.
     # `sync`/`refresh` eagerly fetch repos for every discovered owner; the TUI
     # lists owners immediately and fetches each on first entry. Any explicit
     # `owners` above are unioned in. Requires an org-read token scope (GitHub
@@ -40,12 +44,12 @@ providers:
     #
     # all_owners: true
     #
-    # exclude_owners: ignore specific owners by name (case-insensitive). Use the
-    # special token "self" to exclude your own account when all_owners is on.
+    # exclude_owners: ignore specific owners by name (case-insensitive). To
+    # exclude your own account, list your `username` here.
     #
     # exclude_owners:
     #   - noisy-org
-    #   - self
+    #   - mipmip
     # include_archived / include_forks control the cache SUPERSET: they decide
     # which repos are fetched and cached. The TUI's interactive facet filters
     # (f: fork, a: archived, v: visibility) only NARROW what is already cached —

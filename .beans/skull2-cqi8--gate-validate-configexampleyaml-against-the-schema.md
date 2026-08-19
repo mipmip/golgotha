@@ -1,11 +1,11 @@
 ---
 # skull2-cqi8
 title: 'Gate: validate config.example.yaml against the schema'
-status: in-progress
+status: completed
 type: task
 priority: normal
 created_at: 2026-08-19T13:29:26Z
-updated_at: 2026-08-19T18:38:21Z
+updated_at: 2026-08-19T18:41:43Z
 parent: skull2-ok4c
 ---
 
@@ -66,3 +66,15 @@ so (b) is the meaningful deliverable, not a stretch.
 - `hup config check <path>` as a user-facing feature (validate an arbitrary file
   before installing). Only gives level (a); the gate doesn't need it. File
   separately if wanted.
+
+
+
+## Summary of Changes
+
+Added a two-level config-example gate riding the existing coverage check (no
+flake wiring): (a) `TestExampleConfigValid` loads config.example.yaml via
+`config.LoadFrom`; (b) `TestExampleConfigComplete` reflects over the Config
+struct graph and asserts every yaml key appears as a line-anchored `key:`
+(commented/list forms count), with an empty allowlist. Normalized the example's
+`api_url` comment to `# key:` form. Shipped as 2026-08-19-add-config-example-gate
+(commit 25645768).

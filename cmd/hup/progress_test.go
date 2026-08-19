@@ -37,7 +37,7 @@ func (f *fakeFetchClient) RepoDetails(_ context.Context, _, _ string) (provider.
 func (f *fakeFetchClient) Readme(_ context.Context, _, _ string) (string, error) { return "", nil }
 
 func (f *fakeFetchClient) ListRepos(ctx context.Context, owners []string) ([]provider.Repo, error) {
-	owner := config.SelfOwner
+	owner := ""
 	if len(owners) > 0 {
 		owner = owners[0]
 	}
@@ -72,7 +72,7 @@ func (f *fakeFetchClient) FetchOwner(ctx context.Context, emit fetch.Emit, owner
 }
 
 func ownerOrSelf(o string) string {
-	if o == config.SelfOwner {
+	if o == "" {
 		return "me"
 	}
 	return o
@@ -126,8 +126,9 @@ func TestRefreshAllOwnersCommitOnlyOnComplete(t *testing.T) {
 	p := &config.Provider{
 		Name:          "prov",
 		Type:          config.ProviderGitHub,
+		Username:      "me",
 		AllOwners:     true,
-		ExcludeOwners: []string{"self"}, // keep it to discovered orgs only
+		ExcludeOwners: []string{"me"}, // exclude self; keep it to discovered orgs only
 	}
 	client := &fakeFetchClient{owners: []string{"good", "bad"}, failOn: "bad"}
 	printer := &cliProgressPrinter{w: &bytes.Buffer{}}

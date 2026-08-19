@@ -170,6 +170,7 @@ providers:
   - name: github-personal
     type: github
     short: gh
+    username: selfuser
     api_url: %q
     web_url: https://example.test
     clone_protocol: https

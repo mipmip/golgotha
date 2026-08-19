@@ -256,11 +256,7 @@ func defaultOwnerFetcher(cfg *config.Config) func(ctx context.Context, p *config
 			if err != nil {
 				return ownerFetchedMsg{Provider: p.Name, Owner: owner, Err: err}
 			}
-			var reqOwners []string
-			if owner != config.SelfOwner {
-				reqOwners = []string{owner}
-			}
-			repos, err := client.ListRepos(ctx, reqOwners)
+			repos, err := client.ListRepos(ctx, []string{owner})
 			if err != nil {
 				return ownerFetchedMsg{Provider: p.Name, Owner: owner, Err: err}
 			}

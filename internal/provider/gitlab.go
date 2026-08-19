@@ -78,9 +78,10 @@ func (g *GitLab) ListRepos(ctx context.Context, owners []string) ([]Repo, error)
 }
 
 // FetchOwner fetches a single group's projects (including subgroups) page by
-// page, emitting progress events through emit. An empty owner (config.SelfOwner)
-// fetches the authenticated user's membership projects. The total page count is
-// derived from the X-Total-Pages header when present.
+// page, emitting progress events through emit. When owner equals the configured
+// Username it fetches the authenticated user's membership projects; any other
+// owner is fetched as a group. The total page count is derived from the
+// X-Total-Pages header when present.
 func (g *GitLab) FetchOwner(ctx context.Context, emit fetch.Emit, owner string) ([]Repo, error) {
 	token, err := ResolveToken(&g.cfg, g.getter, g.env)
 	if err != nil {
@@ -88,7 +89,7 @@ func (g *GitLab) FetchOwner(ctx context.Context, emit fetch.Emit, owner string) 
 	}
 
 	var path string
-	if owner == config.SelfOwner {
+	if owner == g.cfg.Username {
 		path = "/projects?membership=true"
 	} else {
 		path = fmt.Sprintf("/groups/%s/projects?include_subgroups=true", url.PathEscape(owner))

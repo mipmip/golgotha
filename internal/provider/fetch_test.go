@@ -107,10 +107,10 @@ func TestGitHubFetchOwnerSelf(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 	cfg := config.Provider{
-		Name: "github", Type: config.ProviderGitHub, Short: "gh", APIURL: srv.URL,
+		Name: "github", Type: config.ProviderGitHub, Short: "gh", Username: "pim", APIURL: srv.URL,
 		Auth: config.Auth{Env: "HUPHOP_GITHUB_TOKEN"},
 	}
-	repos, err := NewGitHub(cfg, srv.Client()).FetchOwner(context.Background(), nil, config.SelfOwner)
+	repos, err := NewGitHub(cfg, srv.Client()).FetchOwner(context.Background(), nil, cfg.Username)
 	if err != nil {
 		t.Fatal(err)
 	}

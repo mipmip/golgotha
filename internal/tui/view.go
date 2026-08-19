@@ -13,6 +13,9 @@ var (
 	selectedStyle = lipgloss.NewStyle().Bold(true)
 	dimStyle      = lipgloss.NewStyle().Faint(true)
 	footerStyle   = lipgloss.NewStyle().Faint(true)
+	// selfStyle tints the user's own account in the owner list so it reads as
+	// "you" while behaving like an ordinary owner.
+	selfStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
 )
 
 // View implements tea.Model.
@@ -76,7 +79,11 @@ func (m *Model) bodyText() string {
 		owners := m.visibleOwners()
 		labels := make([]string, len(owners))
 		for i, o := range owners {
-			labels[i] = ownerLabel(o)
+			label := ownerLabel(o)
+			if o == m.selProvider.Username {
+				label = selfStyle.Render(label)
+			}
+			labels[i] = label
 			if !m.fetchedOwners[m.selProvider.Name][o] {
 				labels[i] += dimStyle.Render(" (not fetched)")
 			}

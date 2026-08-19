@@ -390,21 +390,33 @@ func (m *Model) providerNames() []string {
 	return names
 }
 
-// selfOwnerLabel is the display label for the SelfOwner sentinel ("") in the
-// owner list.
-const selfOwnerLabel = "(your account)"
-
-// ownerLabel renders an owner name for display, mapping the SelfOwner sentinel.
+// ownerLabel renders an owner name for display. Owners are real logins (the self
+// account is the configured Username), so this is a plain passthrough kept as the
+// single display seam for owner names.
 func ownerLabel(owner string) string {
-	if owner == config.SelfOwner {
-		return selfOwnerLabel
-	}
 	return owner
 }
 
-// ownersFor returns the owner names for a provider. It uses the cached owner
-// index (including discovered-but-unfetched owners) when present, and falls back
-// to distinct repo-derived owners for a legacy/eager cache without an index.
+// pinSelfFirst moves self (the provider's Username) to the front of a sorted
+// owner list so the user's own account leads, behaving like an ordinary owner
+// otherwise. It is a no-op when self is absent.
+func pinSelfFirst(owners []string, self string) []string {
+	for i, o := range owners {
+		if o == self {
+			out := make([]string, 0, len(owners))
+			out = append(out, o)
+			out = append(out, owners[:i]...)
+			out = append(out, owners[i+1:]...)
+			return out
+		}
+	}
+	return owners
+}
+
+// ownersFor returns the owner names for a provider, with the self account (the
+// provider's Username) pinned first. It uses the cached owner index (including
+// discovered-but-unfetched owners) when present, and falls back to distinct
+// repo-derived owners for a legacy/eager cache without an index.
 func (m *Model) ownersFor(p *config.Provider) []string {
 	if idx := m.ownersByProvider[p.Name]; len(idx) > 0 {
 		// Preserve the index order but keep it stable and de-duplicated.
@@ -418,7 +430,7 @@ func (m *Model) ownersFor(p *config.Provider) []string {
 			owners = append(owners, o)
 		}
 		sort.Strings(owners)
-		return owners
+		return pinSelfFirst(owners, p.Username)
 	}
 
 	seen := map[string]struct{}{}
@@ -431,7 +443,7 @@ func (m *Model) ownersFor(p *config.Provider) []string {
 		owners = append(owners, it.Repo.Owner)
 	}
 	sort.Strings(owners)
-	return owners
+	return pinSelfFirst(owners, p.Username)
 }
 
 // filtered returns the subset of items whose value fuzzy-matches the active

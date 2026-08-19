@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -78,6 +79,7 @@ func TestRunSyncEndToEnd(t *testing.T) {
 		"  - name: test\n" +
 		"    type: github\n" +
 		"    short: gh\n" +
+		"    username: me\n" +
 		"    clone_protocol: ssh\n"
 	if err := os.WriteFile(filepath.Join(cfgDir, "config.yaml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatal(err)
@@ -112,7 +114,7 @@ func TestRunSyncUnknownProvider(t *testing.T) {
 	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	cfgYAML := "providers:\n  - name: test\n    type: github\n    short: gh\n"
+	cfgYAML := "providers:\n  - name: test\n    type: github\n    short: gh\n    username: me\n"
 	if err := os.WriteFile(filepath.Join(cfgDir, "config.yaml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +132,7 @@ func TestRunSyncNoCacheNoFailure(t *testing.T) {
 	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	cfgYAML := "providers:\n  - name: test\n    type: github\n    short: gh\n"
+	cfgYAML := "providers:\n  - name: test\n    type: github\n    short: gh\n    username: me\n"
 	if err := os.WriteFile(filepath.Join(cfgDir, "config.yaml"), []byte(cfgYAML), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -151,6 +153,7 @@ func TestRunReturnsUnknownCommand(t *testing.T) {
 // non-self owner.
 type fakeDiscoverClient struct {
 	owners     []string
+	mu         sync.Mutex // guards listCalls (fetch pool calls ListRepos concurrently)
 	listCalls  [][]string
 	reposByReq map[string][]provider.Repo
 }
@@ -160,9 +163,11 @@ func (f *fakeDiscoverClient) ListOwners(_ context.Context) ([]string, error) {
 }
 
 func (f *fakeDiscoverClient) ListRepos(_ context.Context, owners []string) ([]provider.Repo, error) {
+	f.mu.Lock()
 	f.listCalls = append(f.listCalls, owners)
+	f.mu.Unlock()
 	if len(owners) == 0 {
-		// Self.
+		// Self (defensive; callers now pass the real username).
 		return []provider.Repo{{Owner: "me", Name: "personal"}}, nil
 	}
 	owner := owners[0]
@@ -185,6 +190,7 @@ func TestRefreshAllOwnersEagerSweep(t *testing.T) {
 		Name:      "gh",
 		Type:      config.ProviderGitHub,
 		Short:     "gh",
+		Username:  "me",
 		AllOwners: true,
 		Owners:    []string{"explicit"},
 	}
@@ -206,20 +212,20 @@ func TestRefreshAllOwnersEagerSweep(t *testing.T) {
 			t.Fatalf("owner %q should be fetched after eager sweep", o.Name)
 		}
 	}
-	for _, want := range []string{config.SelfOwner, "acme", "beta", "explicit"} {
+	for _, want := range []string{"me", "acme", "beta", "explicit"} {
 		if !names[want] {
 			t.Fatalf("owner %q missing from index %+v", want, c.Owners)
 		}
 	}
-	// Self was fetched with an empty owner slice.
+	// Self was fetched under its real username ("me").
 	sawSelf := false
 	for _, call := range client.listCalls {
-		if len(call) == 0 {
+		if len(call) == 1 && call[0] == "me" {
 			sawSelf = true
 		}
 	}
 	if !sawSelf {
-		t.Fatalf("expected a ListRepos call with empty owners for self, calls=%v", client.listCalls)
+		t.Fatalf("expected a ListRepos call for self (username %q), calls=%v", "me", client.listCalls)
 	}
 }
 
@@ -231,8 +237,9 @@ func TestRefreshAllOwnersSkipsExcluded(t *testing.T) {
 		Name:          "gh",
 		Type:          config.ProviderGitHub,
 		Short:         "gh",
+		Username:      "me",
 		AllOwners:     true,
-		ExcludeOwners: []string{"noisy", "self"},
+		ExcludeOwners: []string{"noisy", "me"},
 	}
 	client := &fakeDiscoverClient{owners: []string{"acme", "noisy"}}
 

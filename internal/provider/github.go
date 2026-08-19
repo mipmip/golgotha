@@ -77,10 +77,11 @@ func (g *GitHub) ListRepos(ctx context.Context, owners []string) ([]Repo, error)
 }
 
 // FetchOwner fetches a single owner's repositories page by page, emitting
-// progress events through emit. An empty owner (config.SelfOwner) fetches the
-// authenticated user's own repositories. Results are mapped and filtered per the
-// provider config. The cache/caller is responsible for committing only on a
-// complete (non-error, non-canceled) result.
+// progress events through emit. When owner equals the configured Username it
+// fetches the authenticated user's own repositories; any other owner is fetched
+// as an organization. Results are mapped and filtered per the provider config.
+// The cache/caller is responsible for committing only on a complete (non-error,
+// non-canceled) result.
 func (g *GitHub) FetchOwner(ctx context.Context, emit fetch.Emit, owner string) ([]Repo, error) {
 	token, err := ResolveToken(&g.cfg, g.getter, g.env)
 	if err != nil {
@@ -88,7 +89,7 @@ func (g *GitHub) FetchOwner(ctx context.Context, emit fetch.Emit, owner string) 
 	}
 
 	var pathBase string
-	if owner == config.SelfOwner {
+	if owner == g.cfg.Username {
 		pathBase = fmt.Sprintf("/user/repos?per_page=%d&affiliation=owner", githubPageLimit)
 	} else {
 		pathBase = fmt.Sprintf("/orgs/%s/repos?per_page=%d", url.PathEscape(owner), githubPageLimit)

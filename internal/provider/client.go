@@ -16,8 +16,9 @@ import (
 // CLI) type-assert a Provider to OwnerFetcher.
 type OwnerFetcher interface {
 	// FetchOwner fetches one owner's repositories page by page, emitting progress
-	// through emit (which may be nil). An empty owner (config.SelfOwner) fetches
-	// the authenticated user's own repositories. On cancellation it returns
+	// through emit (which may be nil). When owner equals the provider's configured
+	// Username it fetches the authenticated user's own repositories; any other
+	// owner is fetched as an organization/group. On cancellation it returns
 	// ctx.Err() after emitting a Canceled event; on failure it returns the error
 	// after a Failed event.
 	FetchOwner(ctx context.Context, emit fetch.Emit, owner string) ([]Repo, error)
@@ -28,18 +29,18 @@ func repoKey(r Repo) string { return r.Owner + "/" + r.Name }
 
 // listReposOverFetch implements the plain, event-free ListRepos contract over an
 // owner-at-a-time FetchOwner. An empty owners slice means the authenticated
-// user's own repositories (config.SelfOwner). Results across owners are merged
-// and deduped by owner/name; per-owner filtering already happened in FetchOwner,
-// so the merged result is returned as-is.
+// user's own repositories (the provider's Username). Results across owners are
+// merged and deduped by owner/name; per-owner filtering already happened in
+// FetchOwner, so the merged result is returned as-is.
 func listReposOverFetch(
 	ctx context.Context,
 	owners []string,
-	_ *config.Provider,
+	p *config.Provider,
 	fetchOwner func(ctx context.Context, emit fetch.Emit, owner string) ([]Repo, error),
 ) ([]Repo, error) {
 	req := owners
 	if len(req) == 0 {
-		req = []string{config.SelfOwner}
+		req = []string{p.Username}
 	}
 
 	var all []Repo

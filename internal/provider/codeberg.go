@@ -74,10 +74,11 @@ func (c *Codeberg) ListRepos(ctx context.Context, owners []string) ([]Repo, erro
 }
 
 // FetchOwner fetches a single owner's repositories page by page, emitting
-// progress events through emit. An empty owner (config.SelfOwner) fetches the
-// authenticated user's own repositories. The total page count is derived from
-// the X-Total-Count header when present; otherwise pagination falls back to
-// sequential (stopping on a short page).
+// progress events through emit. When owner equals the configured Username it
+// fetches the authenticated user's own repositories; any other owner is fetched
+// as an organization. The total page count is derived from the X-Total-Count
+// header when present; otherwise pagination falls back to sequential (stopping
+// on a short page).
 func (c *Codeberg) FetchOwner(ctx context.Context, emit fetch.Emit, owner string) ([]Repo, error) {
 	token, err := ResolveToken(&c.cfg, c.getter, c.env)
 	if err != nil {
@@ -85,7 +86,7 @@ func (c *Codeberg) FetchOwner(ctx context.Context, emit fetch.Emit, owner string
 	}
 
 	var path string
-	if owner == config.SelfOwner {
+	if owner == c.cfg.Username {
 		path = "/api/v1/user/repos"
 	} else {
 		path = fmt.Sprintf("/api/v1/orgs/%s/repos", url.PathEscape(owner))

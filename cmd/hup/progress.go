@@ -32,7 +32,7 @@ func (p *cliProgressPrinter) emitter(providerName, owner string) fetch.Emit {
 	return func(ev fetch.Event) {
 		p.mu.Lock()
 		defer p.mu.Unlock()
-		who := displayOwner(owner)
+		who := owner
 		switch ev.Kind {
 		case fetch.KindStarted:
 			fmt.Fprintf(p.w, "%s: %s: fetching...\n", providerName, who)
@@ -78,11 +78,7 @@ func fetchOwnersProgress(
 			}
 			// Fallback: no page-aware fetch; frame a single ListRepos with events.
 			emit.Started(p.Name, owner)
-			var reqOwners []string
-			if owner != config.SelfOwner {
-				reqOwners = []string{owner}
-			}
-			repos, err := client.ListRepos(ctx, reqOwners)
+			repos, err := client.ListRepos(ctx, []string{owner})
 			if err != nil {
 				emit.Failed(p.Name, owner, err)
 				results[i] = ownerResult{Owner: owner, Err: err}

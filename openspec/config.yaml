@@ -24,8 +24,11 @@ context: |
   e.g. github TechNative-B-V/foo -> ~/gh.technative-b-v/foo.
 
   Config: ~/.config/huphop/config.yaml. Cache: plain JSON per provider
-  under ~/.cache/huphop/. Sync = clone missing + fast-forward pull
-  existing; never force, skip dirty trees with a warning.
+  under ~/.cache/huphop/. Each provider requires a `username` (your own
+  login): it identifies the self account (fetched via the authenticated
+  endpoint; an empty `owners` resolves to it) and there is no self sentinel.
+  Sync = clone missing + fast-forward pull existing; never force, skip
+  dirty trees with a warning.
 
   PoC scope: TUI (provider -> owner -> repos, fuzzy filter, single +
   bulk clone, open in browser, refresh) and headless `hup sync`.

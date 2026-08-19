@@ -14,6 +14,7 @@ providers:
   - name: github-personal
     type: github
     short: gh
+    username: mipmip
     api_url: https://api.github.com
     web_url: https://github.com
     clone_protocol: ssh
@@ -28,6 +29,7 @@ providers:
   - name: codeberg
     type: codeberg
     short: cb
+    username: pimsnel
     api_url: https://codeberg.org
     web_url: https://codeberg.org
     auth:
@@ -235,7 +237,7 @@ func TestValidate(t *testing.T) {
 		{
 			name: "valid",
 			cfg: Config{Providers: []Provider{
-				{Name: "gh", Type: ProviderGitHub, Short: "gh"},
+				{Name: "gh", Type: ProviderGitHub, Short: "gh", Username: "me"},
 			}},
 		},
 		{
@@ -246,8 +248,8 @@ func TestValidate(t *testing.T) {
 		{
 			name: "duplicate names",
 			cfg: Config{Providers: []Provider{
-				{Name: "dup", Type: ProviderGitHub, Short: "gh"},
-				{Name: "dup", Type: ProviderCodeberg, Short: "cb"},
+				{Name: "dup", Type: ProviderGitHub, Short: "gh", Username: "me"},
+				{Name: "dup", Type: ProviderCodeberg, Short: "cb", Username: "me"},
 			}},
 			wantErr: "duplicate provider name",
 		},
@@ -282,9 +284,9 @@ func TestValidate(t *testing.T) {
 		{
 			name: "all three types valid",
 			cfg: Config{Providers: []Provider{
-				{Name: "a", Type: ProviderGitHub, Short: "gh"},
-				{Name: "b", Type: ProviderCodeberg, Short: "cb"},
-				{Name: "c", Type: ProviderGitLab, Short: "gl"},
+				{Name: "a", Type: ProviderGitHub, Short: "gh", Username: "me"},
+				{Name: "b", Type: ProviderCodeberg, Short: "cb", Username: "me"},
+				{Name: "c", Type: ProviderGitLab, Short: "gl", Username: "me"},
 			}},
 		},
 	}
@@ -334,11 +336,10 @@ func TestResolveOwnersDefaultOff(t *testing.T) {
 		t.Fatalf("default-off owners = %v, want [acme beta] (discovery ignored)", got)
 	}
 
-	// Empty explicit owners means own repos: a single-element {SelfOwner} set is
-	// not synthesized off; the empty list is preserved (clients treat it as own).
-	empty := &Provider{}
-	if got := ResolveOwners(empty, []string{"x"}); len(got) != 0 {
-		t.Fatalf("default-off empty owners = %v, want empty", got)
+	// Empty explicit owners means own repos: resolves to the configured username.
+	own := &Provider{Username: "me"}
+	if got := ResolveOwners(own, []string{"x"}); len(got) != 1 || got[0] != "me" {
+		t.Fatalf("default-off empty owners = %v, want [me]", got)
 	}
 }
 
@@ -353,11 +354,12 @@ func TestResolveOwnersDefaultOffHonorsExclude(t *testing.T) {
 func TestResolveOwnersUnion(t *testing.T) {
 	p := &Provider{
 		AllOwners: true,
+		Username:  "me",
 		Owners:    []string{"extra"},
 	}
 	got := ResolveOwners(p, []string{"orgb", "orga"})
-	// Self first (empty), then sorted orgs and explicit owners.
-	want := []string{SelfOwner, "extra", "orga", "orgb"}
+	// Self (username) first, then sorted orgs and explicit owners.
+	want := []string{"me", "extra", "orga", "orgb"}
 	if len(got) != len(want) {
 		t.Fatalf("union = %v, want %v", got, want)
 	}
@@ -371,17 +373,18 @@ func TestResolveOwnersUnion(t *testing.T) {
 func TestResolveOwnersUnionDedupCaseInsensitive(t *testing.T) {
 	p := &Provider{
 		AllOwners: true,
+		Username:  "me",
 		Owners:    []string{"Acme", "acme"},
 	}
 	got := ResolveOwners(p, []string{"ACME", "beta"})
-	// SelfOwner + acme (first-seen casing) + beta.
-	want := []string{SelfOwner, "ACME", "beta"}
+	// Username first, then acme (first-seen casing) + beta.
+	want := []string{"me", "ACME", "beta"}
 	if len(got) != len(want) {
 		t.Fatalf("dedup = %v, want %v", got, want)
 	}
-	// The self sentinel sorts first; the two named owners are sorted, first-wins
-	// on casing: discovered "ACME" is seen before explicit "Acme".
-	if got[0] != SelfOwner || got[1] != "ACME" || got[2] != "beta" {
+	// Self (username) leads; the two named owners are sorted, first-wins on
+	// casing: discovered "ACME" is seen before explicit "Acme".
+	if got[0] != "me" || got[1] != "ACME" || got[2] != "beta" {
 		t.Fatalf("dedup = %v, want %v", got, want)
 	}
 }
@@ -389,17 +392,18 @@ func TestResolveOwnersUnionDedupCaseInsensitive(t *testing.T) {
 func TestResolveOwnersExcludeIncludingSelf(t *testing.T) {
 	p := &Provider{
 		AllOwners:     true,
+		Username:      "me",
 		Owners:        []string{"keep"},
-		ExcludeOwners: []string{"Noisy", "self"},
+		ExcludeOwners: []string{"Noisy", "ME"},
 	}
 	got := ResolveOwners(p, []string{"noisy", "keep", "other"})
-	// self excluded via "self" token; "noisy" excluded case-insensitively.
+	// self excluded by username (case-insensitively); "noisy" excluded too.
 	want := []string{"keep", "other"}
 	if len(got) != len(want) {
 		t.Fatalf("exclude = %v, want %v", got, want)
 	}
 	for _, o := range got {
-		if o == SelfOwner {
+		if o == "me" {
 			t.Fatalf("self should have been excluded: %v", got)
 		}
 	}

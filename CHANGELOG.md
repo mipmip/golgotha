@@ -7,11 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Required per-provider `username` field identifying your own account on each
+  provider.
+
 ### Changed
 
+- **BREAKING**: `username` is now required for every provider in `config.yaml`
+  (`hup config check` reports it if missing). Your own account is an ordinary
+  owner named by `username` — pinned first and tinted in the TUI owner list —
+  and an empty `owners` list resolves to it. The `self` token in
+  `exclude_owners` is gone; exclude your own account by listing your `username`.
 - `config.example.yaml` comments normalized to copy-pasteable `# key: value`
   form, and the example is now validated against the config schema in CI so it
   can never drift out of sync.
+
+### Fixed
+
+- The TUI owner view no longer over-shows: selecting your own account now lists
+  only your repositories instead of every repo for the provider.
 
 ## [1.0.0] - 2026-08-18
 
