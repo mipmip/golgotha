@@ -1,11 +1,11 @@
 ---
 # skull2-egce
 title: show details take long
-status: in-progress
+status: completed
 type: bug
 priority: normal
 created_at: 2026-08-19T11:00:51Z
-updated_at: 2026-08-19T22:10:18Z
+updated_at: 2026-08-19T22:33:51Z
 parent: skull2-ok4c
 ---
 
@@ -49,3 +49,20 @@ Honest caveat: the very first open of a never-seen repo always needs one fetch;
 prefetch just moves it to idle cursor time. Change name: `speed-up-repo-details`.
 Capabilities: repo-details (parallel fetch + prefetch) and tui (navigate-prefetch
 wiring). No config/schema change.
+
+
+
+## Summary of Changes
+
+Sped up the detail view. defaultDetailFetcher refactored to detailFetcherWith(build)
+and now fetches RepoDetails + Readme concurrently (goroutines + WaitGroup); a
+README failure is non-fatal (details shown with empty README). Added
+navigate-prefetch: cursor-movement keys at levelRepos call schedulePrefetch
+(debounced 200ms via tea.Tick with a seq counter); handlePrefetchTick warms the
+highlighted repo's cache in the background if uncached (cancellable, superseded
+prefetches cancelled), reusing detailFetcher — whose result handleDetailLoaded
+already ignores unless it matches the open detail. Confirmed via a cache-hit
+regression test that a seeded cache makes openDetail hit disk with no fetcher
+call. (Diagnosis: not git clone, cache works, glamour ~0.18ms; the cost was two
+sequential cold-open round-trips.) Coverage: tui 80.2%, overall 80.9%. Shipped as
+2026-08-19-speed-up-repo-details (commit 541bec33).
