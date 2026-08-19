@@ -18,7 +18,7 @@ providers:
     type: github
     short: gh
     web_url: https://github.com
-    # api_url defaults to https://api.github.com (override for GitHub Enterprise).
+    # api_url: https://api.github.com   # default; override for GitHub Enterprise
     clone_protocol: ssh          # ssh | https
     auth:
       cli: gh                    # reuse the `gh` CLI token when available

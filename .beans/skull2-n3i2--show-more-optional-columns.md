@@ -5,8 +5,7 @@ status: draft
 type: task
 priority: normal
 created_at: 2026-08-17T18:18:16Z
-updated_at: 2026-08-17T19:41:09Z
-parent: skull2-ok4c
+updated_at: 2026-08-18T09:29:34Z
 ---
 
 selectable columns per organization.

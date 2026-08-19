@@ -5,8 +5,7 @@ status: draft
 type: task
 priority: normal
 created_at: 2026-08-17T19:34:33Z
-updated_at: 2026-08-17T19:39:35Z
-parent: skull2-ok4c
+updated_at: 2026-08-18T09:29:29Z
 blocked_by:
     - skull2-p22b
 ---
