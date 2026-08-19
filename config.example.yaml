@@ -15,7 +15,8 @@ clone_pattern_tpl: "{{.BaseDir}}/{{.Short}}.{{.OwnerLower}}/{{.Repo}}"
 # TUI modes. Each mode sets its chrome (ordered `header`/`footer` element lists)
 # and any mode settings. Omit `modes` entirely to use the built-in management
 # mode (the standard layout). `default_mode` picks the mode when --mode is not
-# given; --mode <name> overrides it. Placeable elements: breadcrumb, action_menu,
+# given; --mode <name> overrides it.
+# Placeable elements: breadcrumb, action_menu,
 # filter, facet_status, status_message, position_indicator, switch_hint,
 # clone_status. The repository list is always the body.
 #

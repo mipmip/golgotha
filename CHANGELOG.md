@@ -45,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - You can now move the selection while typing a fuzzy filter (↑/↓, PgUp/PgDn,
   Ctrl+N/Ctrl+P); typing narrows and resets to the top, and a single Enter acts
   on the highlighted match instead of requiring two presses.
+- The footer (keybindings, position indicator) is now pinned to the bottom of
+  the viewport instead of floating up under a short list.
 
 ## [1.0.0] - 2026-08-18
 

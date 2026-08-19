@@ -125,7 +125,10 @@ func TestGitHubFetchOwnerCancel(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/orgs/acme/repos", func(w http.ResponseWriter, r *http.Request) {
 		cancel() // cancel as soon as the first request arrives
-		fmt.Fprint(w, `[{"name":"a","owner":{"login":"acme"}}]`)
+		// Block until the client aborts the in-flight request (its context was
+		// canceled), so FetchOwner deterministically observes cancellation
+		// rather than racing a successful response.
+		<-r.Context().Done()
 	})
 	srv := httptest.NewServer(mux)
 	defer srv.Close()

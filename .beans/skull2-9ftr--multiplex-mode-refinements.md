@@ -1,11 +1,11 @@
 ---
 # skull2-9ftr
 title: multiplex mode refinements
-status: in-progress
+status: completed
 type: task
 priority: normal
 created_at: 2026-08-19T19:47:17Z
-updated_at: 2026-08-19T20:05:58Z
+updated_at: 2026-08-19T20:46:41Z
 parent: skull2-ok4c
 ---
 
@@ -53,3 +53,19 @@ exit 0 (the whole tmux quick-jump in one command).
 **Touches:** internal/syncer (progress clone), internal/tui (multiplex.go async +
 popup overlay, view.go renderRepos, update.go space/Enter), cmd/hup + run.go
 (--flatlist). Config schema unchanged (no gate/example impact).
+
+
+
+## Summary of Changes
+
+Four multiplex refinements. (1) renderRepos omits the checkbox and toggleSelect
+is inert when multiplexActive(). (2) A successful switch sets quitting + returns
+tea.Quit (exit 0); failures stay with an error. (3) Syncer gained a
+progress-emitting clone: ExecGit.CloneProgress runs `git clone --progress`,
+scanCRorLF splits stderr, parseGitCloneProgress → (frac,phase); Engine.CloneRepoProgress
+emits via callback (plain CloneRepo unchanged for sync). (4) multiplexActivate is
+async: streams a cloneEvent channel, shows a centered lipgloss.Place modal with a
+determinate bubbles/progress bar, Esc cancels; on done → switch → quit. (5)
+`hup tui --flatlist` starts in the combined flat view via startFlat; composes
+with --mode. Coverage overall 80.5% (syncer 89.4%). Shipped as
+2026-08-19-refine-multiplex-mode (commit 372c99d0).

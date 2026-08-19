@@ -37,26 +37,57 @@ func (m *Model) View() string {
 	body := m.bodyText()
 	header, footer := m.modeChrome()
 
-	var b strings.Builder
-	var hdr []string
+	var hdr, ftr []string
 	for _, el := range header {
 		if s, ok := m.renderElement(el); ok {
 			hdr = append(hdr, s)
 		}
 	}
-	if len(hdr) > 0 {
-		b.WriteString(strings.Join(hdr, "\n"))
+	for _, el := range footer {
+		if s, ok := m.renderElement(el); ok {
+			ftr = append(ftr, s)
+		}
+	}
+	headerBlock := strings.Join(hdr, "\n")
+	footerBlock := strings.Join(ftr, "\n")
+
+	// Pad between the body and the footer so the footer is pinned to the bottom
+	// of the viewport when the body is short. When the list fills the viewport
+	// (or the height is unknown), pad is zero and layout is unchanged.
+	sep := 0
+	if headerBlock != "" {
+		sep = 1 // blank line separating header from body
+	}
+	used := textLines(headerBlock) + sep + textLines(body) + textLines(footerBlock)
+	pad := 0
+	if m.height > 0 && m.height > used {
+		pad = m.height - used
+	}
+
+	var b strings.Builder
+	if headerBlock != "" {
+		b.WriteString(headerBlock)
 		b.WriteString("\n\n")
 	}
 	b.WriteString(body)
 	b.WriteString("\n")
-	for _, el := range footer {
-		if s, ok := m.renderElement(el); ok {
-			b.WriteString(s)
-			b.WriteString("\n")
-		}
+	for i := 0; i < pad; i++ {
+		b.WriteString("\n")
+	}
+	if footerBlock != "" {
+		b.WriteString(footerBlock)
+		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+// textLines returns the number of lines a rendered block occupies, treating the
+// empty string as zero lines (unlike lipgloss.Height, which counts "" as 1).
+func textLines(s string) int {
+	if s == "" {
+		return 0
+	}
+	return strings.Count(s, "\n") + 1
 }
 
 // cloneModalView renders the multiplex clone popup: a centered bordered box with
