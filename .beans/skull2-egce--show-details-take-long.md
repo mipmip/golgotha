@@ -1,11 +1,11 @@
 ---
 # skull2-egce
 title: show details take long
-status: draft
+status: todo
 type: bug
 priority: normal
 created_at: 2026-08-19T11:00:51Z
-updated_at: 2026-08-19T21:09:51Z
+updated_at: 2026-08-19T21:27:09Z
 parent: skull2-ok4c
 ---
 

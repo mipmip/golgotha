@@ -51,34 +51,28 @@ func (m *Model) View() string {
 	headerBlock := strings.Join(hdr, "\n")
 	footerBlock := strings.Join(ftr, "\n")
 
-	// Pad between the body and the footer so the footer is pinned to the bottom
-	// of the viewport when the body is short. When the list fills the viewport
-	// (or the height is unknown), pad is zero and layout is unchanged.
-	sep := 0
+	// Assemble the frame as a slice of lines, then join without a trailing
+	// newline so the rendered frame is exactly m.height lines (no off-by-one
+	// that would scroll the top row off-screen).
+	var lines []string
 	if headerBlock != "" {
-		sep = 1 // blank line separating header from body
+		lines = append(lines, strings.Split(headerBlock, "\n")...)
+		lines = append(lines, "") // blank separator between header and body
 	}
-	used := textLines(headerBlock) + sep + textLines(body) + textLines(footerBlock)
-	pad := 0
-	if m.height > 0 && m.height > used {
-		pad = m.height - used
-	}
+	lines = append(lines, strings.Split(body, "\n")...)
 
-	var b strings.Builder
-	if headerBlock != "" {
-		b.WriteString(headerBlock)
-		b.WriteString("\n\n")
-	}
-	b.WriteString(body)
-	b.WriteString("\n")
-	for i := 0; i < pad; i++ {
-		b.WriteString("\n")
+	footerLines := textLines(footerBlock)
+	if m.height > 0 {
+		// Pad so the footer is pinned to the bottom of the viewport when the body
+		// is short. When the body already fills the viewport, this is a no-op.
+		for len(lines) < m.height-footerLines {
+			lines = append(lines, "")
+		}
 	}
 	if footerBlock != "" {
-		b.WriteString(footerBlock)
-		b.WriteString("\n")
+		lines = append(lines, strings.Split(footerBlock, "\n")...)
 	}
-	return b.String()
+	return strings.Join(lines, "\n")
 }
 
 // textLines returns the number of lines a rendered block occupies, treating the
