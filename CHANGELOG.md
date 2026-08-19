@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   selecting a repo, clones it if needed then runs a templated, shell-safe
   `switch_command` (clone-path fields plus `{{.Target}}`) — e.g. jump to a tmux
   session at the checkout.
+- `hup tui --flatlist` starts directly in the combined flat repo list; combine
+  with `--mode multiplex` to fuzzy-find any repo and jump to it in one command.
 - Combined "All repositories" view: an entry in the provider list opens a flat,
   cross-provider list of every cached repo (provider-prefixed rows, a
   completeness badge, and a full cross-provider refresh), with the existing
@@ -24,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Multiplex mode is more polished: no multi-select checkbox (single-repo
+  action), a successful switch exits cleanly, and cloning-first shows a centered
+  progress popup with a real progress bar (cancel with Esc).
 - **BREAKING**: `username` is now required for every provider in `config.yaml`
   (`hup config check` reports it if missing). Your own account is an ordinary
   owner named by `username` — pinned first and tinted in the TUI owner list —

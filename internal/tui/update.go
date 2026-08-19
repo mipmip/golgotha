@@ -24,6 +24,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 
+	case cloneMsg:
+		if !m.cloning {
+			return m, nil // stale event after a cancel
+		}
+		if msg.ev.Done {
+			m.cloning = false
+			m.cloneCancel = nil
+			if msg.ev.Err != nil {
+				m.status = fmt.Sprintf("clone failed %s: %v", m.cloneItem.key(), msg.ev.Err)
+				return m, nil
+			}
+			it := m.cloneItem
+			it.Cloned = true
+			return m.doSwitch(m.cloneSwitch, it)
+		}
+		m.cloneFrac = msg.ev.Frac
+		m.clonePhase = msg.ev.Phase
+		return m, waitForClone(msg.ch)
+
 	case cloneResultMsg:
 		if msg.Err != nil {
 			m.status = fmt.Sprintf("clone failed %s: %v", msg.Key, msg.Err)
@@ -225,6 +244,27 @@ func (m *Model) reloadOwnerFromCache(providerName, owner string) {
 // handleKey processes a key message. When the filter input is active most keys
 // are routed to the textinput.
 func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Clone popup: Esc cancels the clone; Ctrl+C quits; other keys are swallowed.
+	if m.cloning {
+		switch msg.Type {
+		case tea.KeyEsc:
+			if m.cloneCancel != nil {
+				m.cloneCancel()
+			}
+			m.cloning = false
+			m.cloneCancel = nil
+			m.status = "clone canceled"
+			return m, nil
+		case tea.KeyCtrlC:
+			if m.cloneCancel != nil {
+				m.cloneCancel()
+			}
+			m.quitting = true
+			return m, tea.Quit
+		}
+		return m, nil
+	}
+
 	// Filter-input mode: capture typing; Enter/Esc leave the mode.
 	if m.filtering {
 		switch msg.Type {
@@ -532,15 +572,18 @@ func (m *Model) enter() (tea.Model, tea.Cmd) {
 }
 
 // multiplexActivate is the multiplex-mode primary action: ensure the repo is
-// cloned (cloning first if needed) and then run the mode's switch_command. A
-// clone failure aborts the switch. The clone/switch run synchronously (the
-// switch is typically a fast tmux command).
+// cloned (showing a progress popup while cloning if needed) and then run the
+// mode's switch_command. A clone failure aborts the switch.
 func (m *Model) multiplexActivate(sw string) (tea.Model, tea.Cmd) {
 	it, ok := m.currentRepo()
 	if !ok {
 		return m, nil
 	}
-	if !it.Cloned {
+	if it.Cloned {
+		return m.doSwitch(sw, it)
+	}
+	if m.progressCloner == nil {
+		// No streaming seam (tests): clone synchronously via the plain cloner.
 		res := m.cloner.CloneRepo(context.Background(), it.Provider, it.Repo)
 		if res.Err != nil {
 			m.status = fmt.Sprintf("clone failed %s: %v", it.key(), res.Err)
@@ -550,13 +593,29 @@ func (m *Model) multiplexActivate(sw string) (tea.Model, tea.Cmd) {
 			it.Target = res.Target
 		}
 		it.Cloned = true
-		m.status = fmt.Sprintf("cloned %s", it.key())
+		return m.doSwitch(sw, it)
 	}
+	// Async clone with the progress popup.
+	ch, cancel := m.progressCloner(context.Background(), it.Provider, it.Repo)
+	m.cloning = true
+	m.cloneCancel = cancel
+	m.cloneFrac = 0
+	m.clonePhase = ""
+	m.cloneItem = it
+	m.cloneSwitch = sw
+	m.status = fmt.Sprintf("cloning %s...", it.key())
+	return m, waitForClone(ch)
+}
+
+// doSwitch runs the switch_command for it and, on success, quits (exit 0). On
+// failure it stays open with a status error.
+func (m *Model) doSwitch(sw string, it repoItem) (tea.Model, tea.Cmd) {
 	if err := m.runSwitch(sw, it); err != nil {
 		m.status = fmt.Sprintf("switch failed %s: %v", it.key(), err)
 		return m, nil
 	}
-	return m, nil
+	m.quitting = true
+	return m, tea.Quit
 }
 
 // providerByName returns the configured provider with the given name, or nil.
@@ -697,8 +756,12 @@ func (m *Model) refreshDetail() (tea.Model, tea.Cmd) {
 	return m, m.detailFetcher(context.Background(), it.Provider, it.Repo)
 }
 
-// toggleSelect flips the multi-select flag on the highlighted repo.
+// toggleSelect flips the multi-select flag on the highlighted repo. It is inert
+// in multiplex mode, where the primary action operates on a single repository.
 func (m *Model) toggleSelect() (tea.Model, tea.Cmd) {
+	if m.multiplexActive() {
+		return m, nil
+	}
 	it, ok := m.currentRepo()
 	if !ok {
 		return m, nil

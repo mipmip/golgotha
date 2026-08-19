@@ -1,11 +1,11 @@
 ---
 # skull2-x4ej
 title: when filtering navigation stops working
-status: in-progress
+status: completed
 type: bug
 priority: normal
 created_at: 2026-08-19T19:51:58Z
-updated_at: 2026-08-19T20:31:15Z
+updated_at: 2026-08-19T20:35:23Z
 parent: skull2-ok4c
 ---
 
@@ -40,3 +40,16 @@ Change name: `fix-filter-navigation`. In the filtering block:
 **Touches:** internal/tui/update.go (filtering key block), spec addition
 "navigation works while filtering", and the one-Enter test update. tui-only, no
 config/schema/gate impact.
+
+
+
+## Summary of Changes
+
+Fixed navigation while the fuzzy filter is being typed. In handleKey's filtering
+block: Up/Down, PgUp/PgDn, and Ctrl+P/Ctrl+N now move the selection (before the
+text input); the cursor resets to the top only when the query text changes
+(compare filter.Value() around filter.Update), so navigation preserves the
+highlight. Enter now acts in one press (blur + delegate to m.enter()), matching
+the spec. j/k/Home/End/Ctrl+U still edit the query. Updated three filter tests to
+the one-Enter model and added filter_nav_test.go. Shipped as
+2026-08-19-fix-filter-navigation (commit 892b696d).

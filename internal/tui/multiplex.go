@@ -113,6 +113,12 @@ func (m *Model) renderSwitchCommand(tpl string, it repoItem) (string, error) {
 	return b.String(), nil
 }
 
+// multiplexActive reports whether the active mode is a multiplex-style mode
+// (its primary action is clone-then-switch, so multiselect is irrelevant).
+func (m *Model) multiplexActive() bool {
+	return m.activeSwitchCommand() != ""
+}
+
 // activeSwitchCommand returns the switch_command for the active mode, or "".
 func (m *Model) activeSwitchCommand() string {
 	if m.cfg == nil {

@@ -71,15 +71,18 @@ the TUI. Context cancellation kills the git process.
 - **Alternative — indeterminate spinner (no syncer change):** simpler but no real
   percentage. Rejected: the bean explicitly wants a determinate bar.
 
-### Decision: Centered modal overlay via line compositing
+### Decision: Centered modal via `lipgloss.Place`
 
-Render the normal view, then splice a bordered lipgloss box (the clone popup)
-into the center of that background by overwriting the middle lines (dimming the
-rest), using `m.width`/`m.height`. This gives a true floating popup rather than a
-full-screen replacement.
+While `m.cloning`, `View` returns a bordered lipgloss box (title + determinate
+`bubbles/progress` bar + phase/percent + "esc: cancel") centered with
+`lipgloss.Place(m.width, m.height, Center, Center, box)`. This is a clean
+centered modal without fragile manual line-splicing/ANSI compositing.
 
-- **Alternative — full-screen progress view (like `fetchProgressView`):** less
-  code but not a "popup". Rejected per the chosen modal style.
+- **Alternative — line-splice compositing over the dimmed list:** a truer
+  "floating over content" look, but fiddly (wide runes, escape codes) and
+  higher-risk. Deferred; `lipgloss.Place` satisfies the centered-popup intent.
+- **Alternative — full-screen progress view (like `fetchProgressView`):**
+  simplest but not centered/boxed. Rejected.
 
 ### Decision: `--flatlist` sets initial state after `New`
 

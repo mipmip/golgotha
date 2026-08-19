@@ -24,6 +24,10 @@ func (m *Model) View() string {
 		return ""
 	}
 
+	if m.cloning {
+		return m.cloneModalView()
+	}
+
 	if m.nav == levelDetail {
 		return m.detailView()
 	}
@@ -53,6 +57,24 @@ func (m *Model) View() string {
 		}
 	}
 	return b.String()
+}
+
+// cloneModalView renders the multiplex clone popup: a centered bordered box with
+// a determinate progress bar, phase and percentage.
+func (m *Model) cloneModalView() string {
+	phase := m.clonePhase
+	if phase == "" {
+		phase = "cloning"
+	}
+	body := titleStyle.Render("Cloning "+m.cloneItem.key()) + "\n\n" +
+		m.progress.ViewAs(m.cloneFrac) + "\n" +
+		dimStyle.Render(fmt.Sprintf("%s  %d%%", phase, int(m.cloneFrac*100))) + "\n\n" +
+		dimStyle.Render("esc: cancel")
+	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(1, 2).Render(body)
+	if m.width > 0 && m.height > 0 {
+		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, box)
+	}
+	return box
 }
 
 // headerText renders the breadcrumb / title for the current scope.
@@ -169,10 +191,6 @@ func (m *Model) renderRepos(rows []repoItem) string {
 		if i == m.cursor {
 			prefix = "> "
 		}
-		mark := "[ ]"
-		if it.Selected {
-			mark = "[x]"
-		}
 		cloned := " "
 		if it.Cloned {
 			cloned = "*"
@@ -182,7 +200,17 @@ func (m *Model) renderRepos(rows []repoItem) string {
 			// Disambiguate across providers in the combined view.
 			label = it.Provider.Short + "  " + label
 		}
-		line := fmt.Sprintf("%s %s %s", mark, cloned, label)
+		var line string
+		if m.multiplexActive() {
+			// Multiplex acts on a single repo; no multi-select checkbox.
+			line = fmt.Sprintf("%s %s", cloned, label)
+		} else {
+			mark := "[ ]"
+			if it.Selected {
+				mark = "[x]"
+			}
+			line = fmt.Sprintf("%s %s %s", mark, cloned, label)
+		}
 		if i == m.cursor {
 			line = cursorStyle.Render(line)
 		} else if it.Selected {

@@ -129,6 +129,53 @@ func (e *Engine) CloneRepo(ctx context.Context, p *config.Provider, r provider.R
 	return res
 }
 
+// ProgressGit is the optional interface a Git implementation satisfies to
+// support progress-emitting clones (ExecGit does).
+type ProgressGit interface {
+	CloneProgress(ctx context.Context, url, dir string, emit func(frac float64, phase string)) error
+}
+
+// CloneRepoProgress clones a single repository like CloneRepo, but streams
+// progress (fraction 0..1 and phase) through emit when the underlying Git
+// supports it (falling back to a plain clone otherwise).
+func (e *Engine) CloneRepoProgress(ctx context.Context, p *config.Provider, r provider.Repo, emit func(frac float64, phase string)) Result {
+	res := Result{Repo: r}
+
+	target, err := clonepath.RenderFor(e.Cfg, p, p.WebURL, r.Owner, r.Name)
+	if err != nil {
+		res.Action = ActionFailed
+		res.Err = fmt.Errorf("resolving target path: %w", err)
+		return res
+	}
+	res.Path = target
+
+	if e.Git.IsRepo(target) {
+		res.Action = ActionSkipped
+		res.Warning = fmt.Sprintf("already cloned at %s", target)
+		return res
+	}
+
+	url := cloneURL(p, r)
+	if url == "" {
+		res.Action = ActionFailed
+		res.Err = fmt.Errorf("no %s clone URL for %s/%s", p.CloneProtocol, r.Owner, r.Name)
+		return res
+	}
+
+	if pg, ok := e.Git.(ProgressGit); ok {
+		err = pg.CloneProgress(ctx, url, target, emit)
+	} else {
+		err = e.Git.Clone(ctx, url, target)
+	}
+	if err != nil {
+		res.Action = ActionFailed
+		res.Err = fmt.Errorf("cloning %s: %w", url, err)
+		return res
+	}
+	res.Action = ActionCloned
+	return res
+}
+
 // SyncProvider reconciles one provider's repositories against the filesystem and
 // returns its summary. Per-repo failures are collected and never abort the run.
 func (e *Engine) SyncProvider(ctx context.Context, p *config.Provider, repos []provider.Repo) ProviderSummary {

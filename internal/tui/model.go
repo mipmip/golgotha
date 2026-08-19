@@ -143,6 +143,18 @@ type Model struct {
 	// runCommand executes a multiplex switch_command's argv (no shell). Injectable
 	// for tests; defaults to running the process.
 	runCommand func(argv []string) error
+
+	// progressCloner starts a streaming clone for one repo, returning a channel
+	// of progress/terminal events and a cancel. nil disables the progress popup
+	// (multiplexActivate then clones synchronously via cloner).
+	progressCloner func(ctx context.Context, p *config.Provider, r provider.Repo) (<-chan cloneEvent, context.CancelFunc)
+	// Clone-popup state (multiplex): cloning is true while the modal is shown.
+	cloning     bool
+	cloneCancel context.CancelFunc
+	cloneFrac   float64
+	clonePhase  string
+	cloneItem   repoItem
+	cloneSwitch string
 	// selProvider / selOwner track the drilled-down selection.
 	selProvider *config.Provider
 	selOwner    string
@@ -268,6 +280,7 @@ func New(cfg *config.Config) *Model {
 	m.readme = viewport.New(0, 0)
 
 	m.cloner = newEngineCloner(cfg)
+	m.progressCloner = defaultProgressCloner(cfg)
 	m.refresher = defaultRefresher(cfg, m)
 	m.ownerFetcher = defaultOwnerFetcher(cfg)
 	m.progressFetcher = defaultProgressFetcher(cfg)
@@ -579,6 +592,17 @@ func (m *Model) sortRepos(items []repoItem) []repoItem {
 // allReposLabel is the synthetic top-of-providers entry that opens the combined
 // cross-provider flat repository view.
 const allReposLabel = "All repositories"
+
+// startFlat initializes the model directly in the combined flat view (used by
+// the --flatlist launch option). It is independent of the active mode.
+func (m *Model) startFlat() {
+	m.flatAll = true
+	m.selProvider = nil
+	m.selOwner = ""
+	m.nav = levelRepos
+	m.cursor = 0
+	m.offset = 0
+}
 
 // providerRows returns the rows shown at the providers level: the fuzzy-filtered
 // provider names followed by the synthetic "All repositories" entry.

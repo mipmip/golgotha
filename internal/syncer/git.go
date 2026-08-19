@@ -1,12 +1,15 @@
 package syncer
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -76,6 +79,69 @@ func (g *ExecGit) Clone(ctx context.Context, url, dir string) error {
 	}
 	_, err := g.run(ctx, "", "clone", url, dir)
 	return err
+}
+
+// gitProgressRe matches a git `--progress` line like
+// "Receiving objects:  58% (580/1000), 1.5 MiB", capturing the phase and the
+// integer percentage. An optional "remote: " prefix is tolerated.
+var gitProgressRe = regexp.MustCompile(`^(?:remote: )?([A-Za-z][A-Za-z ]+):\s+(\d+)%`)
+
+// parseGitCloneProgress extracts a fraction (0..1) and phase from a single git
+// progress line. ok is false for lines that carry no percentage.
+func parseGitCloneProgress(line string) (frac float64, phase string, ok bool) {
+	m := gitProgressRe.FindStringSubmatch(strings.TrimSpace(line))
+	if m == nil {
+		return 0, "", false
+	}
+	pct, err := strconv.Atoi(m[2])
+	if err != nil {
+		return 0, "", false
+	}
+	return float64(pct) / 100, strings.TrimSpace(m[1]), true
+}
+
+// scanCRorLF is a bufio.SplitFunc that splits on either '\r' or '\n', so git's
+// carriage-return-updated progress lines are each delivered as a token.
+func scanCRorLF(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	for i, b := range data {
+		if b == '\r' || b == '\n' {
+			return i + 1, data[:i], nil
+		}
+	}
+	if atEOF && len(data) > 0 {
+		return len(data), data, nil
+	}
+	return 0, nil, nil
+}
+
+// CloneProgress clones url into dir like Clone, but runs `git clone --progress`
+// and parses git's stderr into fraction/phase progress events emitted via emit
+// (which may be nil). It satisfies the optional ProgressGit interface.
+func (g *ExecGit) CloneProgress(ctx context.Context, url, dir string, emit func(frac float64, phase string)) error {
+	if parent := filepath.Dir(dir); parent != "" {
+		if err := os.MkdirAll(parent, 0o755); err != nil {
+			return fmt.Errorf("creating parent dir %s: %w", parent, err)
+		}
+	}
+	cmd := exec.CommandContext(ctx, g.bin(), "clone", "--progress", url, dir)
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	sc := bufio.NewScanner(stderr)
+	sc.Split(scanCRorLF)
+	for sc.Scan() {
+		if frac, phase, ok := parseGitCloneProgress(sc.Text()); ok && emit != nil {
+			emit(frac, phase)
+		}
+	}
+	if err := cmd.Wait(); err != nil {
+		return fmt.Errorf("git clone %s: %w", url, err)
+	}
+	return nil
 }
 
 // Fetch runs `git fetch` in dir.

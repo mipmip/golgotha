@@ -352,6 +352,57 @@ func (e *engineCloner) CloneRepo(ctx context.Context, p *config.Provider, r prov
 	}
 }
 
+// cloneEvent is a streaming clone progress/terminal event for the multiplex
+// clone popup.
+type cloneEvent struct {
+	Frac  float64
+	Phase string
+	Done  bool
+	Err   error
+}
+
+// cloneMsg carries one cloneEvent plus the channel to keep listening on.
+type cloneMsg struct {
+	ev cloneEvent
+	ch <-chan cloneEvent
+}
+
+// waitForClone blocks on the next clone event and wraps it in a cloneMsg.
+func waitForClone(ch <-chan cloneEvent) tea.Cmd {
+	return func() tea.Msg {
+		ev, ok := <-ch
+		if !ok {
+			return cloneMsg{ev: cloneEvent{Done: true}, ch: ch}
+		}
+		return cloneMsg{ev: ev, ch: ch}
+	}
+}
+
+// defaultProgressCloner returns a streaming clone seam backed by the syncer
+// engine (which emits git --progress fractions).
+func defaultProgressCloner(cfg *config.Config) func(ctx context.Context, p *config.Provider, r provider.Repo) (<-chan cloneEvent, context.CancelFunc) {
+	eng := syncer.NewEngine(syncer.NewExecGit(), cfg)
+	return func(ctx context.Context, p *config.Provider, r provider.Repo) (<-chan cloneEvent, context.CancelFunc) {
+		ctx, cancel := context.WithCancel(ctx)
+		ch := make(chan cloneEvent, 16)
+		go func() {
+			defer close(ch)
+			res := eng.CloneRepoProgress(ctx, p, r, func(frac float64, phase string) {
+				select {
+				case ch <- cloneEvent{Frac: frac, Phase: phase}:
+				case <-ctx.Done():
+				}
+			})
+			if res.Err != nil {
+				ch <- cloneEvent{Done: true, Err: res.Err}
+				return
+			}
+			ch <- cloneEvent{Done: true}
+		}()
+		return ch, cancel
+	}
+}
+
 // resolveTarget resolves the clone target path for a repo.
 func resolveTarget(cfg *config.Config, p *config.Provider, r provider.Repo) (string, error) {
 	return clonepath.RenderFor(cfg, p, p.WebURL, r.Owner, r.Name)
