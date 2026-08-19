@@ -229,10 +229,12 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.filtering {
 		switch msg.Type {
 		case tea.KeyEnter:
+			// One press acts on the highlighted filtered item: leave edit mode
+			// (keeping the query so the list stays narrowed) and drill/open.
 			m.filtering = false
 			m.filter.Blur()
 			m.clampCursor()
-			return m, nil
+			return m.enter()
 		case tea.KeyEsc:
 			m.filtering = false
 			m.filter.Blur()
@@ -242,11 +244,28 @@ func (m *Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlC:
 			m.quitting = true
 			return m, tea.Quit
+		case tea.KeyUp, tea.KeyCtrlP:
+			m.moveCursor(-1)
+			return m, nil
+		case tea.KeyDown, tea.KeyCtrlN:
+			m.moveCursor(1)
+			return m, nil
+		case tea.KeyPgUp:
+			m.moveCursor(-m.pageStep())
+			return m, nil
+		case tea.KeyPgDown:
+			m.moveCursor(m.pageStep())
+			return m, nil
 		}
+		// Editing the query: feed the input, and reset the selection to the top
+		// only when the query text actually changes (navigation preserves it).
+		old := m.filter.Value()
 		var cmd tea.Cmd
 		m.filter, cmd = m.filter.Update(msg)
-		m.cursor = 0
-		m.offset = 0
+		if m.filter.Value() != old {
+			m.cursor = 0
+			m.offset = 0
+		}
 		return m, cmd
 	}
 

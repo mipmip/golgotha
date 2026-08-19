@@ -62,6 +62,18 @@ func key(s string) tea.KeyMsg {
 		return tea.KeyMsg{Type: tea.KeySpace}
 	case "backspace":
 		return tea.KeyMsg{Type: tea.KeyBackspace}
+	case "up":
+		return tea.KeyMsg{Type: tea.KeyUp}
+	case "down":
+		return tea.KeyMsg{Type: tea.KeyDown}
+	case "pgup":
+		return tea.KeyMsg{Type: tea.KeyPgUp}
+	case "pgdown":
+		return tea.KeyMsg{Type: tea.KeyPgDown}
+	case "ctrl+n":
+		return tea.KeyMsg{Type: tea.KeyCtrlN}
+	case "ctrl+p":
+		return tea.KeyMsg{Type: tea.KeyCtrlP}
 	default:
 		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(s)}
 	}
@@ -150,18 +162,13 @@ func TestFilterNarrowsReposAtReposLevel(t *testing.T) {
 	if len(repos) != 1 || repos[0].key() != "mipmip/huphop" {
 		t.Fatalf("expected only mipmip/huphop, got %v", repos)
 	}
-	// apply filter (enter leaves filtering mode but keeps query)
-	send(m, key("enter"))
-	if m.filtering {
-		t.Fatal("expected filtering mode to end on enter")
-	}
-	if m.filter.Value() != "huph" {
-		t.Fatalf("expected filter kept, got %q", m.filter.Value())
-	}
-	// esc clears the query
+	// esc while filtering clears the query and exits filter mode
 	send(m, key("esc"))
+	if m.filtering {
+		t.Fatal("expected filtering mode to end on esc")
+	}
 	if m.filter.Value() != "" {
-		t.Fatalf("expected filter cleared, got %q", m.filter.Value())
+		t.Fatalf("expected filter cleared on esc, got %q", m.filter.Value())
 	}
 }
 
@@ -197,13 +204,11 @@ func TestFilterEnterDrillsFilteredOwner(t *testing.T) {
 	for _, r := range "mip" {
 		send(m, key(string(r)))
 	}
-	// Leave filter-input mode (still level-aware, filtered to mipmip only).
+	// One Enter acts on the highlighted filtered owner (mipmip) and drills in.
 	send(m, key("enter"))
 	if m.filtering {
 		t.Fatal("expected filtering mode to end on enter")
 	}
-	// cursor is at 0 -> the only filtered owner (mipmip). Enter drills in.
-	send(m, key("enter"))
 	if m.nav != levelRepos || m.selOwner != "mipmip" {
 		t.Fatalf("expected repos level for mipmip, got nav=%d owner=%q", m.nav, m.selOwner)
 	}
@@ -245,14 +250,13 @@ func TestFilterClearsOnBack(t *testing.T) {
 	for _, r := range "mip" {
 		send(m, key(string(r)))
 	}
-	send(m, key("enter")) // leave filter-input mode, query kept
 	if m.filter.Value() == "" {
-		t.Fatal("expected filter query kept after applying")
+		t.Fatal("expected filter query while typing")
 	}
-	// Back clears the filter first (stays at owners level).
+	// Esc while filtering clears the query and exits filter mode (stays at owners).
 	send(m, key("esc"))
-	if m.filter.Value() != "" {
-		t.Fatalf("expected filter cleared on back, got %q", m.filter.Value())
+	if m.filtering || m.filter.Value() != "" {
+		t.Fatalf("expected filter cleared and mode ended, filtering=%v q=%q", m.filtering, m.filter.Value())
 	}
 	if m.nav != levelOwners {
 		t.Fatalf("expected still at owners level, got nav=%d", m.nav)

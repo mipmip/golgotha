@@ -1,11 +1,11 @@
 ---
 # skull2-39es
 title: Combined cross-provider flat repo list
-status: in-progress
+status: completed
 type: feature
 priority: normal
 created_at: 2026-08-19T12:52:56Z
-updated_at: 2026-08-19T19:13:43Z
+updated_at: 2026-08-19T19:21:16Z
 parent: skull2-ok4c
 ---
 
@@ -57,3 +57,18 @@ view accidentally resembled.
 - **Out of scope:** columns (skull2-n3i2), star sort (skull2-2h8p), paging
   (skull2-4pob), modes framework (skull2-wzbf).
 - Change: `add-combined-repo-view` (tui-only spec delta).
+
+
+
+## Summary of Changes
+
+Added the combined cross-provider flat repo view. A synthetic "All repositories"
+entry (appended to the provider list) sets a `flatAll` scope and enters
+levelRepos with selProvider=nil, so visibleRepos aggregates every cached repo
+across providers/owners. Rows are provider-short prefixed; fuzzy match includes
+the provider short. Header shows a completeness badge (N repos · X/Y owners
+loaded, with a refresh hint). `r` in the flat view does a full refresh across
+all providers (batched `refresher`, per-provider atomic). Esc returns to the
+provider list. Self-tint deferred (rides qp5y, already shipped — could be a
+follow-up). Coverage overall 81.4%. Shipped as 2026-08-19-add-combined-repo-view
+(commit 275da606).

@@ -37,6 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The TUI owner view no longer over-shows: selecting your own account now lists
   only your repositories instead of every repo for the provider.
+- You can now move the selection while typing a fuzzy filter (↑/↓, PgUp/PgDn,
+  Ctrl+N/Ctrl+P); typing narrows and resets to the top, and a single Enter acts
+  on the highlighted match instead of requiring two presses.
 
 ## [1.0.0] - 2026-08-18
 

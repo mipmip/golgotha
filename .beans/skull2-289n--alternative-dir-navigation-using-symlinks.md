@@ -1,11 +1,12 @@
 ---
 # skull2-289n
 title: alternative dir navigation using symlinks
-status: draft
-type: task
+status: todo
+type: epic
 priority: normal
 created_at: 2026-08-18T08:31:19Z
-updated_at: 2026-08-19T18:35:55Z
+updated_at: 2026-08-19T19:56:20Z
+parent: skull2-ok4c
 ---
 
 My brain doesn't always think in forge organizations. Sometimes a project or personal topic has repo's spread over multiple organizations and maybe forges as well. I want a clean strategy to have virtual collections of repo's groups by different taxonomies.  e.g. Project X: org1/repo12, mipmip/repo3. And Topic Y, repox, repoz. Etc...
