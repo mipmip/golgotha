@@ -482,7 +482,38 @@ func (m *Model) enter() (tea.Model, tea.Cmd) {
 			return m, m.maybeFetchOwner(m.selProvider, m.selOwner)
 		}
 	case levelRepos:
+		if sw := m.activeSwitchCommand(); sw != "" {
+			return m.multiplexActivate(sw)
+		}
 		return m.openDetail()
+	}
+	return m, nil
+}
+
+// multiplexActivate is the multiplex-mode primary action: ensure the repo is
+// cloned (cloning first if needed) and then run the mode's switch_command. A
+// clone failure aborts the switch. The clone/switch run synchronously (the
+// switch is typically a fast tmux command).
+func (m *Model) multiplexActivate(sw string) (tea.Model, tea.Cmd) {
+	it, ok := m.currentRepo()
+	if !ok {
+		return m, nil
+	}
+	if !it.Cloned {
+		res := m.cloner.CloneRepo(context.Background(), it.Provider, it.Repo)
+		if res.Err != nil {
+			m.status = fmt.Sprintf("clone failed %s: %v", it.key(), res.Err)
+			return m, nil
+		}
+		if res.Target != "" {
+			it.Target = res.Target
+		}
+		it.Cloned = true
+		m.status = fmt.Sprintf("cloned %s", it.key())
+	}
+	if err := m.runSwitch(sw, it); err != nil {
+		m.status = fmt.Sprintf("switch failed %s: %v", it.key(), err)
+		return m, nil
 	}
 	return m, nil
 }

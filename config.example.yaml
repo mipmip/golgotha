@@ -12,6 +12,26 @@ base_dir: ~
 # Fields: .BaseDir .Provider .Type .Short .Host .Owner .OwnerLower .Repo .RepoLower
 clone_pattern_tpl: "{{.BaseDir}}/{{.Short}}.{{.OwnerLower}}/{{.Repo}}"
 
+# TUI modes. Each mode sets its chrome (ordered `header`/`footer` element lists)
+# and any mode settings. Omit `modes` entirely to use the built-in management
+# mode (the standard layout). `default_mode` picks the mode when --mode is not
+# given; --mode <name> overrides it. Placeable elements: breadcrumb, action_menu,
+# filter, facet_status, status_message, position_indicator, switch_hint,
+# clone_status. The repository list is always the body.
+#
+# default_mode: management
+# modes:
+#   management:
+#     header: [breadcrumb]
+#     footer: [filter, facet_status, status_message, position_indicator, action_menu]
+#   multiplex:                 # a stripped-down mode for use inside tmux
+#     header: []
+#     footer: [switch_hint]
+#     # switch_command is rendered per repo (clone-path fields plus {{.Target}},
+#     # the local checkout path) then run without a shell. The multiplex primary
+#     # action clones the repo if needed, then runs it.
+#     switch_command: 'tmux-helper new-session -s "{{.Short}}->{{.OwnerLower}}" -c {{.Target}}'
+
 providers:
   # Personal GitHub account (mipmip).
   - name: github-mipmip

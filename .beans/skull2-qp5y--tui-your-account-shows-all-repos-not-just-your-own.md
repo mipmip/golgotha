@@ -1,11 +1,11 @@
 ---
 # skull2-qp5y
 title: 'TUI: "(your account)" shows all repos, not just your own'
-status: in-progress
+status: completed
 type: bug
 priority: normal
 created_at: 2026-08-18T08:46:14Z
-updated_at: 2026-08-19T12:42:05Z
+updated_at: 2026-08-19T19:00:47Z
 parent: skull2-ok4c
 ---
 
@@ -69,3 +69,17 @@ placeholder, no `""` guards.
 - pim's wish for a **combined cross-provider "all repos" list** is a genuinely
   new navigation mode (nav today is strictly Providers→Owners→Repos). It
   belongs with `skull2-wzbf` (tui-modes / multiplexer), not this bug fix.
+
+
+
+## Summary of Changes
+
+Added a required per-provider `username` and deleted the `SelfOwner` "" sentinel
+entirely. Provider clients (github/gitlab/codeberg) route the self fetch by
+`owner == cfg.Username` → authenticated endpoint, else org/group. ResolveOwners
+keys self on username (empty owners → [username]; all_owners unions username;
+exclude by username; dropped the "self" token). TUI pins the self owner first
+and tints it (cyan), ownerLabel is now a passthrough, and owner scoping is
+correct so the self view no longer over-shows. Updated config.example.yaml,
+BRIEFING.md, openspec/config.yaml. Coverage: overall 81.2%, all core ≥80%.
+Shipped as 2026-08-19-fix-self-owner-resolution (commit b33eef71).

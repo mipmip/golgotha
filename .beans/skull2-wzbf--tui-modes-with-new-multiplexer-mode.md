@@ -1,11 +1,11 @@
 ---
 # skull2-wzbf
 title: tui-modes with new multiplexer mode
-status: draft
+status: in-progress
 type: feature
 priority: normal
 created_at: 2026-08-19T11:37:59Z
-updated_at: 2026-08-19T18:22:09Z
+updated_at: 2026-08-19T19:01:25Z
 parent: skull2-ok4c
 ---
 

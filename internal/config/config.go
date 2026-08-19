@@ -38,8 +38,48 @@ type Config struct {
 	BaseDir string `yaml:"base_dir"`
 	// ClonePatternTpl is the global default clone-path template.
 	ClonePatternTpl string `yaml:"clone_pattern_tpl"`
+	// DefaultMode is the TUI mode used when --mode is not given. Defaults to
+	// "management".
+	DefaultMode string `yaml:"default_mode"`
+	// Modes maps a mode name to its configuration (chrome + mode settings). When
+	// omitted, a built-in "management" mode reproducing the standard layout is
+	// synthesized.
+	Modes map[string]ModeConfig `yaml:"modes"`
 	// Providers is the configured list of git providers.
 	Providers []Provider `yaml:"providers"`
+}
+
+// TUI modes and the placeable chrome-element vocabulary.
+const (
+	// ModeManagement is the default browsing mode (Enter opens repo details).
+	ModeManagement = "management"
+	// ModeMultiplex clones-if-needed then runs a switch_command (tmux, etc.).
+	ModeMultiplex = "multiplex"
+)
+
+// KnownElements is the set of placeable header/footer element names. The repo
+// list is the implicit body and is never named here.
+var KnownElements = map[string]bool{
+	"breadcrumb":         true,
+	"action_menu":        true,
+	"filter":             true,
+	"facet_status":       true,
+	"status_message":     true,
+	"position_indicator": true,
+	"switch_hint":        true,
+	"clone_status":       true,
+}
+
+// ModeConfig is a single TUI mode: ordered header/footer element slots plus any
+// mode-specific settings.
+type ModeConfig struct {
+	// Header lists the elements rendered above the repo list, in order.
+	Header []string `yaml:"header"`
+	// Footer lists the elements rendered below the repo list, in order.
+	Footer []string `yaml:"footer"`
+	// SwitchCommand is the per-repo command template run by the multiplex mode's
+	// primary action (rendered then executed without a shell).
+	SwitchCommand string `yaml:"switch_command"`
 }
 
 // Provider is a single configured git-hosting provider.
@@ -242,6 +282,19 @@ func (c *Config) applyDefaults() error {
 		c.ClonePatternTpl = DefaultClonePatternTpl
 	}
 
+	if c.DefaultMode == "" {
+		c.DefaultMode = ModeManagement
+	}
+	if len(c.Modes) == 0 {
+		// Built-in management mode reproducing the standard layout.
+		c.Modes = map[string]ModeConfig{
+			ModeManagement: {
+				Header: []string{"breadcrumb"},
+				Footer: []string{"filter", "facet_status", "status_message", "position_indicator", "action_menu"},
+			},
+		}
+	}
+
 	for i := range c.Providers {
 		p := &c.Providers[i]
 		if p.CloneProtocol == "" {
@@ -308,6 +361,29 @@ func (c *Config) Validate() error {
 		}
 		if p.Username == "" {
 			return fmt.Errorf("provider %q: missing required field \"username\"", p.Name)
+		}
+	}
+
+	if c.DefaultMode != "" && len(c.Modes) > 0 {
+		if _, ok := c.Modes[c.DefaultMode]; !ok {
+			return fmt.Errorf("default_mode %q is not defined in modes", c.DefaultMode)
+		}
+	}
+	for name, mode := range c.Modes {
+		seen := make(map[string]struct{})
+		for _, slot := range [][]string{mode.Header, mode.Footer} {
+			for _, el := range slot {
+				if !KnownElements[el] {
+					return fmt.Errorf("mode %q: unknown element %q", name, el)
+				}
+				if _, dup := seen[el]; dup {
+					return fmt.Errorf("mode %q: element %q appears more than once", name, el)
+				}
+				seen[el] = struct{}{}
+			}
+		}
+		if name == ModeMultiplex && mode.SwitchCommand == "" {
+			return fmt.Errorf("mode %q: missing required field \"switch_command\"", name)
 		}
 	}
 	return nil

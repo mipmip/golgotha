@@ -31,28 +31,27 @@ func (m *Model) View() string {
 	// bodyText mutates m.offset via applyWindow and records the indicator range.
 	// Bubble Tea calls Update then View, so writing offset here is safe.
 	body := m.bodyText()
+	header, footer := m.modeChrome()
 
 	var b strings.Builder
-	b.WriteString(titleStyle.Render(m.headerText()))
-	b.WriteString("\n\n")
+	var hdr []string
+	for _, el := range header {
+		if s, ok := m.renderElement(el); ok {
+			hdr = append(hdr, s)
+		}
+	}
+	if len(hdr) > 0 {
+		b.WriteString(strings.Join(hdr, "\n"))
+		b.WriteString("\n\n")
+	}
 	b.WriteString(body)
 	b.WriteString("\n")
-	if m.filtering || m.filter.Value() != "" {
-		b.WriteString(m.filter.View())
-		b.WriteString("\n")
+	for _, el := range footer {
+		if s, ok := m.renderElement(el); ok {
+			b.WriteString(s)
+			b.WriteString("\n")
+		}
 	}
-	if fs := m.facets.status(); fs != "" {
-		b.WriteString(dimStyle.Render("filters: " + fs))
-		b.WriteString("\n")
-	}
-	if m.status != "" {
-		b.WriteString(dimStyle.Render(m.status))
-		b.WriteString("\n")
-	}
-	b.WriteString(dimStyle.Render(m.indicatorText))
-	b.WriteString("\n")
-	b.WriteString(footerStyle.Render(m.footerText()))
-	b.WriteString("\n")
 	return b.String()
 }
 

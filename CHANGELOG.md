@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Required per-provider `username` field identifying your own account on each
   provider.
+- TUI modes: `default_mode` + `modes:` configure per-mode chrome as ordered
+  `header`/`footer` element slots (repo list stays the body); pick one with
+  `hup tui --mode <name>`. New `multiplex` mode strips the chrome and, on
+  selecting a repo, clones it if needed then runs a templated, shell-safe
+  `switch_command` (clone-path fields plus `{{.Target}}`) — e.g. jump to a tmux
+  session at the checkout.
 
 ### Changed
 

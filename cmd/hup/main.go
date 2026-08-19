@@ -56,7 +56,7 @@ func run(args []string) error {
 		usage(os.Stdout)
 		return nil
 	case "", "tui":
-		return runTUI()
+		return runTUI(args)
 	case "config":
 		return runConfig(args[1:])
 	case "refresh":
@@ -71,12 +71,22 @@ func run(args []string) error {
 
 // runTUI loads the configuration and launches the interactive Bubble Tea
 // browser. It is the default command (bare `hup`) and `hup tui`.
-func runTUI() error {
+func runTUI(args []string) error {
+	fs := flag.NewFlagSet("tui", flag.ContinueOnError)
+	mode := fs.String("mode", "", "TUI mode (defaults to config default_mode)")
+	// args[0] is the subcommand name ("tui") or empty; parse the rest.
+	rest := args
+	if len(rest) > 0 {
+		rest = rest[1:]
+	}
+	if err := fs.Parse(rest); err != nil {
+		return err
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		return err
 	}
-	return tui.Run(cfg)
+	return tui.Run(cfg, *mode)
 }
 
 // runConfig handles the `config` subcommand: `path` and `check`.

@@ -32,6 +32,11 @@ context: |
 
   PoC scope: TUI (provider -> owner -> repos, fuzzy filter, single +
   bulk clone, open in browser, refresh) and headless `hup sync`.
+  TUI modes: `default_mode` + `modes:` set per-mode chrome (ordered
+  header/footer element slots; repo list is the body), picked with --mode.
+  The `multiplex` mode clones-if-needed then runs a shell-safe
+  `switch_command` (clone-path fields plus {{.Target}}); it runs a user
+  command, not the "tmux generator" non-goal.
   Non-goals: code search, tmux generator, providers beyond the three.
 
   Tickets: beans (milestone titles prefixed 01, 02, ...). Testing:

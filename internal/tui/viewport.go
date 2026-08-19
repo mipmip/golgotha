@@ -69,18 +69,22 @@ func window(cursor, offset, height, chrome, n int) (newOffset, first, last int) 
 // position indicator (1) + footer (1). It must match View exactly so the last
 // list row is never clipped.
 func (m *Model) chrome() int {
-	c := 2 // title + blank line
-	if m.filtering || m.filter.Value() != "" {
-		c++ // filter input line
+	header, footer := m.modeChrome()
+	c := 0
+	hdrLines := 0
+	for _, el := range header {
+		if s, ok := m.renderElement(el); ok {
+			hdrLines += countLines(s)
+		}
 	}
-	if m.facets.status() != "" {
-		c++ // facet-status line
+	if hdrLines > 0 {
+		c += hdrLines + 1 // header lines plus the blank separator before the body
 	}
-	if m.status != "" {
-		c++ // status line
+	for _, el := range footer {
+		if s, ok := m.renderElement(el); ok {
+			c += countLines(s)
+		}
 	}
-	c++ // position indicator line
-	c++ // footer line
 	return c
 }
 

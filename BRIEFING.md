@@ -141,7 +141,8 @@ providers:
 
 ## 8. Commands (CLI surface)
 
-- `hup` / `hup tui` — launch the TUI (default).
+- `hup` / `hup tui [--mode NAME]` — launch the TUI (default). `--mode` selects a
+  configured mode (else `default_mode`).
 - `hup sync [--provider NAME] [--no-refresh]` — headless: refresh cache,
   then clone-missing + ff-pull-existing across configured owners. Cron target.
 - `hup refresh [--provider NAME]` — refresh cache only.
@@ -160,6 +161,12 @@ line-oriented logging; non-zero on failure).
 - **Refresh** (`r`) → re-fetch current provider's cache.
 - Clear status feedback: already-cloned vs not; clone/pull progress; errors.
 - Keybindings shown in a help/footer bar; `q` quits.
+- **Modes**: `default_mode` + `modes:` configure per-mode chrome as ordered
+  `header`/`footer` element slots (repo list is the fixed body); pick with
+  `--mode`. The `multiplex` mode strips chrome and its primary action clones the
+  repo if needed then runs a templated, shell-safe `switch_command` (clone-path
+  fields plus `{{.Target}}`, the local checkout path) — e.g. a tmux session
+  switch. Not the "tmux generator" non-goal: it runs a user-supplied command.
 
 ## 10. Sync semantics (backup)
 

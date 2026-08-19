@@ -134,6 +134,12 @@ type Model struct {
 
 	// nav is the current navigation level.
 	nav level
+	// mode is the active TUI mode name (management, multiplex, ...). Empty falls
+	// back to the built-in management chrome.
+	mode string
+	// runCommand executes a multiplex switch_command's argv (no shell). Injectable
+	// for tests; defaults to running the process.
+	runCommand func(argv []string) error
 	// selProvider / selOwner track the drilled-down selection.
 	selProvider *config.Provider
 	selOwner    string
@@ -241,6 +247,8 @@ func New(cfg *config.Config) *Model {
 		ownersByProvider: map[string][]string{},
 		fetchedOwners:    map[string]map[string]bool{},
 		nav:              levelProviders,
+		mode:             cfg.DefaultMode,
+		runCommand:       runArgv,
 		checkCloned:      isGitRepo,
 	}
 	for i := range cfg.Providers {
